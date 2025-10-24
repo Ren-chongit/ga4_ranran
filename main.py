@@ -2,17 +2,34 @@ import os
 import json
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import DateRange, Metric, Dimension, RunReportRequest
+import google.auth
+from google.oauth2 import service_account
 import google.generativeai as genai
 
 def main():
-    # Secretsから取得
-    service_account_json = os.getenv("ga4_ranran_secret") or os.getenv("GA4_SERVICE_ACCOUNT_JSON")
+    # GitHub Secretsから環境変数を取得
+    client_email = os.getenv("GOOGLE_CLIENT_EMAIL")
+    private_key = os.getenv("GOOGLE_PRIVATE_KEY").replace("\\n", "\n")
+    property_id = os.getenv("GA_PROPERTY_ID")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
-    property_id = os.getenv("GA4_PROPERTY_ID", "YOUR_GA4_PROPERTY_ID")  # 必要に応じてSecrets化
 
-    # JSONをロード
-    creds = json.loads(service_account_json)
-    client = BetaAnalyticsDataClient.from_service_account_info(creds)
+    # サービスアカウント情報を構成
+    service_account_info = {
+        "type": "service_account",
+        "project_id": "dummy-project",
+        "private_key_id": "dummy-key-id",
+        "private_key": private_key,
+        "client_email": client_email,
+        "client_id": "dummy-client-id",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": ""
+    }
+
+    # 認証クレデンシャル作成
+    credentials = service_account.Credentials.from_service_account_info(service_account_info)
+    client = BetaAnalyticsDataClient(credentials=credentials)
 
     # GA4データ取得
     request = RunReportRequest(
@@ -23,14 +40,15 @@ def main():
     )
     response = client.run_report(request)
 
-    # 結果を整形
-    rows = []
-    for row in response.rows:
-        rows.append({
+    # データ整形
+    rows = [
+        {
             "date": row.dimension_values[0].value,
             "pageTitle": row.dimension_values[1].value,
             "views": row.metric_values[0].value,
-        })
+        }
+        for row in response.rows
+    ]
     report_text = json.dumps(rows, ensure_ascii=False, indent=2)
 
     # Geminiで要約
