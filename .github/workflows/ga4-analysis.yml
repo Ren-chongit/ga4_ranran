@@ -1,8 +1,8 @@
-name: GA4 自動分析
+name: Google Analytics 自動分析
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 毎日 日本時間12:00（UTC 03:00）
+    - cron: '0 0 * * *'  # 毎日 日本時間9:00（UTC 24:00）
   workflow_dispatch:
 
 permissions:
@@ -40,13 +40,8 @@ jobs:
               "coreTools": ["mcp__google-analytics__run_report"]
             }
           prompt: |
-            あなたはGA4の要約アシスタントです。
-            GA_PROPERTY_ID のプロパティについて、昨日（プロパティのタイムゾーン）を対象に
-            - 主なトラフィックソース（source/medium）
-            - 人気ページ（pagePath 等）
-            - 主なコンバージョンイベント
-            を mcp__google-analytics__run_report で取得・要約してください。
-            可能なら前日比/先週同曜日比も一言で補足してください。
+            あなたはGA4の接続テストアシスタントです。
+            GA_PROPERTY_ID のプロパティにアクセスできたら、教えてください。
 
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
