@@ -42,7 +42,7 @@ jobs:
           prompt: |
             あなたはGA4の接続テストアシスタントです。
             GA_PROPERTY_ID のプロパティにアクセスできたら、教えてください。
-            アクセスできた証拠として前日のアクティブユーザー数を教えてください。
+            - アクセスできた証拠として前日のアクティブユーザー数を教えてください。
 
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
