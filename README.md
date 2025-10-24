@@ -121,6 +121,7 @@ jobs:
             });
             core.info(`✅ Issue #${issue.number} を作成しました`);
 ```
+---
 
 ## 🧠 実行と確認
 GitHub 上部メニュー → 「Actions」
