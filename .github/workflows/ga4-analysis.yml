@@ -46,7 +46,6 @@ jobs:
             - 人気ページ（pagePath 等）
             - 主なコンバージョンイベント
             を mcp__google-analytics__run_report で取得して、300文字以内で日本語要約してください。
-            可能なら前日比/先週同曜日比も一言で補足してください。
 
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
