@@ -45,7 +45,7 @@ jobs:
             - 主なトラフィックソース（source/medium）
             - 人気ページ（pagePath 等）
             - 主なコンバージョンイベント
-            を mcp__google-analytics__run_report で取得して、500文字以内で日本語要約してください。
+            を mcp__google-analytics__run_report で取得して、400文字以内で日本語要約してください。
             可能なら前日比/先週同曜日比も一言で補足してください。
 
       - name: Create GitHub Issue with Summary
