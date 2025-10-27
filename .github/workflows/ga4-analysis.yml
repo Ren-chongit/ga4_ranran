@@ -47,6 +47,13 @@ jobs:
             - 主なコンバージョンイベント
             - 改善点
             を日本語でまとめてください。
+            例：
+              ## トラフィック傾向
+              ...
+              ## ページ改善提案
+              ...
+              ## コンバージョンと今後の施策
+              ...
 
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
