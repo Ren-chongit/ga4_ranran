@@ -1,9 +1,9 @@
-name: Google Analytics 自動分析(エラー解消)
+name: Gemini GA4 Summary
 
 on:
+  workflow_dispatch: {}
   schedule:
-    - cron: '0 0 * * *'  # 毎日 日本時間9:00（UTC 24:00）
-  workflow_dispatch:
+    - cron: '0 23 * * *'  # 毎日 日本時間08:00（UTC 23:00）
 
 permissions:
   contents: read
@@ -40,15 +40,13 @@ jobs:
               "coreTools": ["mcp__google-analytics__run_report"]
             }
           prompt: |
-            あなたはWebサイトのアクセス解析レポートアシスタントです。
-            昨日（プロパティのタイムゾーン）のアクセスデータを分析し、
-            簡潔に8行以内でまとめてください。
-
-            主要なトラフィックソース、人気ページ、コンバージョンの変化に焦点を当て、
-            可能であれば前日比も含めてください。
-
-            可能であれば前日比・先週同曜日比や変化もお知らせください。
-            出力は日本語で、見やすい箇条書きレポート形式で。
+            あなたはGA4の要約アシスタントです。
+            GA_PROPERTY_ID のプロパティについて、昨日（プロパティのタイムゾーン）を対象に
+            - 主なトラフィックソース（source/medium）
+            - 人気ページ（pagePath 等）
+            - 主なコンバージョンイベント
+            を mcp__google-analytics__run_report で取得・要約してください。
+            可能なら前日比/先週同曜日比も一言で補足してください。
 
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
