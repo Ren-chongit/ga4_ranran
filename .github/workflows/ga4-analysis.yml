@@ -3,7 +3,7 @@ name: Gemini GA4 Summary
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '15 0 * * 2'  # 毎日 日本時間09:00（UTC 00:00）
+    - cron: '16 0 * * 2'  # 毎日 日本時間09:00（UTC 00:00）
 
 permissions:
   contents: read
