@@ -1,5 +1,5 @@
 # 📊 Google Analytics 自動分析レポート
-#（GA4 × Gemini × GitHub Actions）
+（GA4 × Gemini × GitHub Actions）
 
 このリポジトリは **Google Analytics 4（GA4）のデータを自動取得し、Gemini API で要約して GitHub Issue にレポートを自動投稿するワークフロー**です。  
 毎週月曜日 9:15（日本時間）に実行され、アクセスの増減や改善ポイントを要約してレポート化します。
