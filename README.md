@@ -56,12 +56,12 @@
 `.github/workflows/ga4_report.yml`
 
 ```yaml
-name: Google Analytics 自動分析
+name: Gemini GA4 Summary
 
 on:
+  workflow_dispatch: {}
   schedule:
-    - cron: '0 0 * * *'  # 毎日 日本時間9:00
-  workflow_dispatch:
+    - cron: '0 0 * * 3'  # 毎週 日本時間09:00（UTC 00:00）
 
 permissions:
   contents: read
@@ -70,7 +70,7 @@ permissions:
 jobs:
   summarize-ga4:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     steps:
       - name: Run Gemini GA4 Summary via MCP (JS server)
@@ -78,9 +78,9 @@ jobs:
         uses: google-gemini/gemini-cli-action@main
         env:
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
-          GA_PROPERTY_ID:     ${{ secrets.GA_PROPERTY_ID }}
-          GEMINI_MODEL:       gemini-2.0-flash # トークン量制限(TPM)のため2.0-flash利用（proの制限だとオーバーする）
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}   # 改行ありPEMをそのまま
+          GA_PROPERTY_ID:     ${{ secrets.GA_PROPERTY_ID }}       # 数字のみ
+          GEMINI_MODEL:       gemini-2.0-flash  # ←これ消すと2.5-pro（最新AI）※すぐ文字数制限にひっかかる。有料プランでないと無理そう
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           settings_json: |
@@ -99,16 +99,30 @@ jobs:
               "coreTools": ["mcp__google-analytics__run_report"]
             }
           prompt: |
-            あなたはWebサイトのアクセス解析アシスタントです。
-            昨日（プロパティのタイムゾーン）のアクセスデータを分析し、
-            主要なトラフィックソース、人気ページ、コンバージョンの変化に注目して、
-            改善提案を3点以内で出してください。
-            出力は日本語の箇条書きでお願いします。
+            あなたはGA4データアナリストです。
+            以下のGA4データを処理しますが、
+            GA_PROPERTY_ID のプロパティから昨日（タイムゾーンは Asia/Tokyo）から一週間のデータを取得し
+            - 主なトラフィックソース（source/medium）
+            - 人気ページ（pagePath 等）
+            - 主なコンバージョンイベント
+            - 改善点
+            を日本語でまとめてください。
+            例：
+              ## 🔎トラフィック傾向
+              ...
+              ## 🎯人気ページ
+              ...
+              ## 💹コンバージョンと考察
+              ...
+              ## 👩‍🎓ページ改善提案
+              ...
+              ## 🔧今後の施策
+              ...
 
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ github.token }} 
           script: |
             const today = new Date().toISOString().split('T')[0];
             const outs = ${{ toJSON(steps.ga4.outputs) }};
