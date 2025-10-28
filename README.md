@@ -1,7 +1,8 @@
 # 📊 Google Analytics 自動分析レポート（GA4 × Gemini × GitHub Actions）
 
 このリポジトリは **Google Analytics 4（GA4）のデータを自動取得し、Gemini API で要約して GitHub Issue にレポートを自動投稿するワークフロー**です。  
-毎朝 9:00（日本時間）に実行され、アクセスの増減や改善ポイントを要約してレポート化します。
+毎週月曜日 9:15（日本時間）に実行され、アクセスの増減や改善ポイントを要約してレポート化します。
+※現在は検証中のため、不定期実行
 
 ---
 
@@ -150,9 +151,15 @@ PERMISSION_DENIED	GA4側のサービスアカウント権限が不足。分析�
 
 ---
 
-## 📅 今後の拡張アイデア
-Slack / Teams にも自動通知
+## 参考情報
 
-特定ページの流入急増を検知してアラート発行
+- 一度のインプット・アウトプット（TPM）で、500,000～600,000TPMぐらい使う
+- Gemini 2.5 Proのリミットは125,000TPM
+- Gemini 2.5 Flashのリミットは250,000TPM
+- Gemini 2.0 Flashのリミットは1,000,000TPM
+そんな訳で、Gemini 2.0 Flashを使ってます。上記は全て無料枠の話。
+公式 https://ai.google.dev/gemini-api/docs/rate-limits?hl=ja に記載あり
 
-月次まとめPDFを自動生成
+## 関連app
+- https://github.com/Ren-chongit/issue_info
+- 上記にて新規Issue検知後Teams通知app作成済み（private repo / 運用はローカルPCにて）
