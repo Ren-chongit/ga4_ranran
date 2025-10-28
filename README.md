@@ -80,6 +80,7 @@ jobs:
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID:     ${{ secrets.GA_PROPERTY_ID }}
+          GEMINI_MODEL:       gemini-2.0-flash # トークン量制限(TPM)のため2.0-flash利用（proの制限だとオーバーする）
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           settings_json: |
