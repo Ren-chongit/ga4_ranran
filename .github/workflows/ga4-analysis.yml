@@ -3,7 +3,7 @@ name: Gemini GA4 Summary
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '0 0 * * 3'  # 毎日 日本時間09:00（UTC 00:00）
+    - cron: '5 0 * * *'  # 毎日 日本時間09:00（UTC 00:00）
 
 permissions:
   contents: read
@@ -22,9 +22,9 @@ jobs:
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}   # 改行ありPEMをそのまま
           GA_PROPERTY_ID:     ${{ secrets.GA_PROPERTY_ID }}       # 数字のみ
+          GEMINI_MODEL:       gemini-2.0-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          model: gemini-2.0-flash
           settings_json: |
             {
               "mcpServers": {
