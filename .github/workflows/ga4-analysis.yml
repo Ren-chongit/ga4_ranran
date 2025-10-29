@@ -19,9 +19,10 @@ jobs:
         id: ga4
         uses: google-gemini/gemini-cli-action@main
         env:
-          "GOOGLE_CLIENT_EMAIL": "${GOOGLE_CLIENT_EMAIL}",
-          "GOOGLE_PRIVATE_KEY": "${GOOGLE_PRIVATE_KEY}",
-          "GA_PROPERTY_ID": "${GA_PROPERTY_ID}"
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GA_PROPERTY_ID:     ${{ secrets.GA_PROPERTY_ID }}
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL:       gemini-2.0-flash  # ←これ消すと2.5-pro（最新AI）※すぐ文字数制限にひっかかる。有料プランでないと無理そう
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -32,9 +33,9 @@ jobs:
                   "command": "npx",
                   "args": ["-y", "mcp-server-google-analytics"],
                   "env": {
-                    "GOOGLE_CLIENT_EMAIL": "$GOOGLE_CLIENT_EMAIL",
-                    "GOOGLE_PRIVATE_KEY": "$GOOGLE_PRIVATE_KEY",
-                    "GA_PROPERTY_ID": "$GA_PROPERTY_ID"
+                    "GOOGLE_CLIENT_EMAIL": "${GOOGLE_CLIENT_EMAIL}",
+                    "GOOGLE_PRIVATE_KEY": "${GOOGLE_PRIVATE_KEY}",
+                    "GA_PROPERTY_ID": "${GA_PROPERTY_ID}"
                   }
                 }
               },
