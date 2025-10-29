@@ -44,24 +44,45 @@ jobs:
             }
           prompt: |
             あなたはGA4データアナリストです。
-            以下のGA4データを処理しますが、
-            GA_PROPERTY_ID のプロパティから昨日（タイムゾーンは Asia/Tokyo）から一週間のデータを取得し
-            - 主なトラフィックソース（source/medium）
-            - 人気ページ（pagePath 等）
-            - 主なコンバージョンイベント
-            - 改善点
-            を日本語でまとめてください。
-            例：
-              ## トラフィック傾向
-              ...
-              ## 人気ページ
-              ...
-              ## コンバージョンと考察
-              ...
-              ## ページ改善提案
-              ...
-              ## 今後の施策
-              ...
+            
+            【重要】必ず mcp__google-analytics__run_report ツールを使用してGA4データを取得してください。
+            
+            以下の手順で実行してください：
+            
+            1. まず run_report ツールを使って、昨日から過去7日間（タイムゾーン: Asia/Tokyo）のトラフィックソースデータを取得
+               - date_ranges: 昨日から7日前まで
+               - dimensions: ["sessionSource", "sessionMedium"]
+               - metrics: ["sessions"]
+               - order_bys: セッション数で降順
+            
+            2. 次に run_report ツールを使って、人気ページデータを取得
+               - date_ranges: 昨日から7日前まで
+               - dimensions: ["pagePath"]
+               - metrics: ["screenPageViews"]
+               - order_bys: ページビュー数で降順
+            
+            3. 最後に run_report ツールでコンバージョンイベントデータを取得
+               - date_ranges: 昨日から7日前まで
+               - dimensions: ["eventName"]
+               - metrics: ["eventCount"]
+               - dimension_filter: コンバージョンイベントに絞り込み
+            
+            取得したデータを以下の形式で日本語でまとめてください：
+            
+            ## トラフィック傾向
+            （取得したトラフィックソースデータを分析）
+            
+            ## 人気ページ
+            （取得した人気ページデータを分析）
+            
+            ## コンバージョンと考察
+            （取得したコンバージョンデータを分析）
+            
+            ## ページ改善提案
+            （データに基づく具体的な改善提案）
+            
+            ## 🔧 今後の施策
+            （データに基づく今後のアクション）
       
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
