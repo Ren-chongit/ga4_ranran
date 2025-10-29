@@ -81,7 +81,7 @@ jobs:
             ## ページ改善提案
             （データに基づく具体的な改善提案）
             
-            ## 🔧 今後の施策
+            ## 今後の施策
             （データに基づく今後のアクション）
       
       - name: Create GitHub Issue with Summary
@@ -89,15 +89,36 @@ jobs:
         with:
           github-token: ${{ github.token }} 
           script: |
-            const today = new Date().toISOString().split('T')[0];
+            const today = new Date();
+            // 日本時間を考慮（UTCから9時間進める）
+            const jstOffset = 9 * 60 * 60 * 1000;
+            const jstToday = new Date(today.getTime() + jstOffset);
+            
+            const yesterday = new Date(jstToday);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            const sevenDaysAgo = new Date(jstToday);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            // YYYY-MM-DD形式に整形
+            const fmt = (d) => d.toISOString().split('T')[0];
+            const title = `(${fmt(jstToday)}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
+            
             const outs = ${{ toJSON(steps.ga4.outputs) }};
-            const pick = (keys) => { for (const k of keys){ const v=(outs?.[k]||'').trim(); if(v) return v; } return ''; };
+            const pick = (keys) => { 
+              for (const k of keys){ 
+                const v=(outs?.[k]||'').trim(); 
+                if(v) return v; 
+              } 
+              return ''; 
+            };
             const body = pick(['gemini_result','gemini_response','summary','output','text','content'])
               || 'GA4集計結果が取得できませんでした。';
+            
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,
               repo:  context.repo.repo,
-              title: `GA4サマリー (${today})`,
+              title,
               body
             });
             core.info(`✅ Issue #${issue.number} を作成しました`);
