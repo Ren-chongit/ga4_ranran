@@ -100,9 +100,10 @@ jobs:
             const sevenDaysAgo = new Date(jstToday);
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
-            // YYYY-MM-DD形式に整形
-            const fmt = (d) => d.toISOString().split('T')[0];
-            const title = `(${fmt(jstToday)}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
+            // MM-DD形式に整形
+            const fmt = (d) => d.toISOString().split('T')[0].slice(5); // "2025-10-22" → "10-22"
+            const todayFull = jstToday.toISOString().split('T')[0]; // 実行日は西暦あり
+            const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             
             const outs = ${{ toJSON(steps.ga4.outputs) }};
             const pick = (keys) => { 
