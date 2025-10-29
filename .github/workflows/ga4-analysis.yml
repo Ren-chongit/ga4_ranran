@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      # 1) ここで秘密鍵を正しい改行入りPEMに整形して、$GITHUB_ENV に書き戻す
       - name: Fix GOOGLE_PRIVATE_KEY format
         run: |
           echo "${{ secrets.GOOGLE_PRIVATE_KEY }}" | awk '{gsub(/\\n/,"\n")}1' > key.pem
@@ -25,7 +24,6 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_ENV"
 
-      # 2) Gemini CLI実行＋GA4サマリー生成
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
@@ -52,8 +50,6 @@ jobs:
               },
               "coreTools": ["mcp__google-analytics__run_report"]
             }
-
-
           prompt: |
             あなたはGA4データアナリストです。
             GA_PROPERTY_ID のプロパティから昨日（タイムゾーンは Asia/Tokyo）から一週間のデータを取得し
@@ -74,7 +70,6 @@ jobs:
               ## 今後の施策
               ...
 
-      # 3) Issueを作成
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
         with:
