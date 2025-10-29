@@ -43,15 +43,16 @@ jobs:
                 "google-analytics": {
                   "command": "npx",
                   "args": ["-y", "mcp-server-google-analytics"],
-                  "env": {
-                    "GOOGLE_CLIENT_EMAIL": "${{ env.GOOGLE_CLIENT_EMAIL }}",
-                    "GOOGLE_PRIVATE_KEY": "${{ env.GOOGLE_PRIVATE_KEY }}",
-                    "GA_PROPERTY_ID": "${{ env.GA_PROPERTY_ID }}"
-                  }
+                  "envFromHost": [
+                    "GOOGLE_CLIENT_EMAIL",
+                    "GOOGLE_PRIVATE_KEY",
+                    "GA_PROPERTY_ID"
+                  ]
                 }
               },
               "coreTools": ["mcp__google-analytics__run_report"]
             }
+
 
           prompt: |
             あなたはGA4データアナリストです。
