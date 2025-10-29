@@ -22,17 +22,21 @@ jobs:
         continue-on-error: true
       # MCPサーバーウォームアップ_これないと不安定
     
+      - name: Setup Google credentials
+        run: |
+          echo "${{ secrets.GOOGLE_PRIVATE_KEY }}" > /tmp/google-key.pem
+          chmod 600 /tmp/google-key.pem
+      
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
         env:
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}   # 改行ありPEMをそのまま
-          GA_PROPERTY_ID:     ${{ secrets.GA_PROPERTY_ID }}       # 数字のみ
-          GEMINI_MODEL:       gemini-2.0-flash  # ←これ消すと2.5-pro（最新AI）※すぐ文字数制限にひっかかる。有料プランでないと無理そう
+          GOOGLE_PRIVATE_KEY_FILE: /tmp/google-key.pem
+          GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
+          GEMINI_MODEL: gemini-2.0-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          
           settings_json: |
             {
               "mcpServers": {
@@ -41,7 +45,7 @@ jobs:
                   "args": ["-y", "mcp-server-google-analytics"],
                   "env": {
                     "GOOGLE_CLIENT_EMAIL": "${{ secrets.GOOGLE_CLIENT_EMAIL }}",
-                    "GOOGLE_PRIVATE_KEY": "${{ secrets.GOOGLE_PRIVATE_KEY }}",
+                    "GOOGLE_PRIVATE_KEY_FILE": "/tmp/google-key.pem",
                     "GA_PROPERTY_ID": "${{ secrets.GA_PROPERTY_ID }}"
                   }
                 }
