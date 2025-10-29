@@ -61,11 +61,12 @@ jobs:
                - metrics: ["screenPageViews"]
                - order_bys: ページビュー数で降順
             
-            3. 最後に run_report ツールでコンバージョンイベントデータを取得
-               - date_ranges: 昨日から7日前まで
-               - dimensions: ["eventName"]
-               - metrics: ["eventCount"]
-               - dimension_filter: コンバージョンイベントに絞り込み
+              3. 最後に run_report ツールでコンバージョンイベントデータを取得
+               - 以下のイベントをそれぞれ個別に取得:
+                 * "予約フォーム"
+                 * "purchase"
+                 * "Step7_予約完了"
+               - dimension_filter で eventName を exact match で指定
             
             取得したデータを以下の形式で日本語でまとめてください：
             
