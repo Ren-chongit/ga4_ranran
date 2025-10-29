@@ -1,38 +1,28 @@
 name: Gemini GA4 Summary
-
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '0 0 * * 3'  # 毎週 日本時間09:00（UTC 00:00）
-
+    - cron: '0 0 * * 3'  # 毎週水曜 日本時間09:00（UTC 00:00）
 permissions:
   contents: read
   issues: write
-
 jobs:
   summarize-ga4:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       # MCPサーバーウォームアップ
       - name: Pre-install MCP server
         run: |
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
-      # MCPサーバーウォームアップ_これないと不安定
-    
-      - name: Setup Google credentials
-        run: |
-          echo "${{ secrets.GOOGLE_PRIVATE_KEY }}" > /tmp/google-key.pem
-          chmod 600 /tmp/google-key.pem
       
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
         env:
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_PRIVATE_KEY_FILE: /tmp/google-key.pem
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
           GEMINI_MODEL: gemini-2.0-flash
         with:
@@ -44,9 +34,9 @@ jobs:
                   "command": "npx",
                   "args": ["-y", "mcp-server-google-analytics"],
                   "env": {
-                    "GOOGLE_CLIENT_EMAIL": "${{ secrets.GOOGLE_CLIENT_EMAIL }}",
-                    "GOOGLE_PRIVATE_KEY_FILE": "/tmp/google-key.pem",
-                    "GA_PROPERTY_ID": "${{ secrets.GA_PROPERTY_ID }}"
+                    "GOOGLE_CLIENT_EMAIL": "$GOOGLE_CLIENT_EMAIL",
+                    "GOOGLE_PRIVATE_KEY": "$GOOGLE_PRIVATE_KEY",
+                    "GA_PROPERTY_ID": "$GA_PROPERTY_ID"
                   }
                 }
               },
@@ -72,7 +62,7 @@ jobs:
               ...
               ## 今後の施策
               ...
-
+      
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
         with:
