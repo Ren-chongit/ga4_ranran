@@ -239,4 +239,8 @@ jobs:
               body
             });
             core.info(`✅ Issue #${issue.number} を作成しました`);
+```
+
+さらに詳しい解説は Note(private)に記載してます。
+https://www.notion.so/GA4_MCP-GitHub-299001aed37780b3b6c7ef9e6e817e48
 
