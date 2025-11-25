@@ -244,3 +244,6 @@ jobs:
 さらに詳しい解説は Note(private)に記載してます。
 https://www.notion.so/GA4_MCP-GitHub-299001aed37780b3b6c7ef9e6e817e48
 
+Teams通知に関しては；
+https://github.com/Ren-chongit/issue_info.git
+
