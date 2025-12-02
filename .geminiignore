@@ -1,0 +1,16 @@
+# 巨大なロックファイルを除外
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 画像やアセットを除外
+*.svg
+*.png
+*.jpg
+public/
+
+# ビルド生成物や依存関係を除外
+node_modules/
+dist/
+build/
+.git/
