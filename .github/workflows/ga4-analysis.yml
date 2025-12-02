@@ -2,7 +2,7 @@ name: Gemini GA4 Summary
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '0 0 * * 1'  # 毎週 日本時間09:00（UTC 00:00）　分・時・日・月・曜日
+    - cron: '0 0 * * 1'  # 毎週月曜 日本時間09:00（UTC 00:00）
 permissions:
   contents: read
   issues: write
@@ -11,12 +11,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # MCPサーバーウォームアップ
+      # MCPサーバーの準備（キャッシュ等の確認）
       - name: Pre-install MCP server
         run: |
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
       
+      # 【追加】Geminiに渡す前に、重たいファイルを強制削除してトークンを節約する
+      # これを行わないと package-lock.json や node_modules を読み込んでしまい、無料枠を即座に使い切ります
+      - name: Clean up huge files for Gemini (Token Saving)
+        run: |
+          echo "Removing heavy files to save API quota..."
+          rm -rf .git
+          rm -f package-lock.json
+          rm -f yarn.lock
+          rm -rf node_modules
+          ls -a  # 確認用（何が残っているかログに出す）
+
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
@@ -157,7 +168,7 @@ jobs:
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
             // MM-DD形式に整形
-            const fmt = (d) => d.toISOString().split('T')[0].slice(5); // "2025-10-22" → "10-22"
+            const fmt = (d) => d.toISOString().split('T')[0].slice(5); // "2025-10-22" -> "10-22"
             const todayFull = jstToday.toISOString().split('T')[0]; // 実行日は西暦あり
             const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             
