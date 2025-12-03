@@ -11,17 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 【重要】 `actions/checkout` は絶対に書きません！
-      # リポジトリをダウンロードしないことで、Geminiが見るフォルダを「完全な空」にします。
-      # これでトークン超過エラーは100%発生しなくなります。
-
-      # 念のため、フォルダが空であることを確認するステップ（ログ確認用）
-      - name: Verify Empty Directory
-        run: |
-          echo "Current directory is:"
-          pwd
-          echo "Files in directory (Should be empty):"
-          ls -la
+      # リポジトリ読み込みなし（トークン節約の鉄則）
 
       # MCPサーバーの準備
       - name: Pre-install MCP server
@@ -34,14 +24,12 @@ jobs:
         id: ga4
         uses: google-gemini/gemini-cli-action@main
         env:
-          # ここでSecretsを環境変数に入れます（これが一番安全で確実です）
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
           GEMINI_MODEL: gemini-2.5-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # ↓↓↓ JSON設定：これが正解の書き方です ↓↓↓
           settings_json: |
             {
               "mcpServers": {
@@ -60,137 +48,65 @@ jobs:
           prompt: |
             あなたはプロのGA4データアナリストです。
             
-            【重要】必ず mcp__google-analytics__run_report ツールを使用してGA4データを取得し、分析結果のみをまとめてください。
+            【超重要：APIエラー回避のための絶対ルール】
+            1. **dimensionFilter（フィルタ機能）は絶対に使用禁止です。**
+               - フィルタを使おうとするとAPIエラーになり、処理が停止します。
+               - 特定のイベントが見たい場合でも、必ず「全イベント」を取得してから、あなたの頭脳で必要な行を探してください。
+            2. データ取得は必ず `mcp__google-analytics__run_report` ツールを使用してください。
             
-            【絶対禁止】
-            - 「了解しました」「まず」「次に」などの前置きや進行説明は一切書かない
-            - データ取得プロセスの説明は書かない。Issueの開始は”yyyy年mm月dd日からyyyy年mm月dd日アクセス解析”で始まり、続けて”## トラフィック傾向”と続く
-            - エラーの説明や試行錯誤の過程は書かない
-            - 「改善する」「強化する」などの抽象的な表現は使わず、必ず具体的なアクションを記載
-            - 推測で数値を埋めない。データが取得できない場合は正直に「データ取得失敗」と記載
+            【手順1：データの取得】
+            以下のデータを、フィルタなしで広範囲に取得してください。
             
-            【必須事項】
-            - 全体のコンバージョン率（予約フォーム開始→完了の%）を必ず以下の手順で計算：
-              1. 予約完了数を確認
-              2. 予約フォーム開始数を確認  
-              3. CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
-              4. 計算式も明記（例：「257件 ÷ 5,628件 = 4.57%」）
-            - 前週データも取得し、増減率を記載（基準期間を明示：例「今週10/22-28 vs 前週10/15-21」）
-            - 改善提案には必ず具体的なアクション（例：「検索ボタンを緑→オレンジに変更」「入力項目を10個→7個に削減」）を含める
-            - 各施策の期待効果を定量的に記載（例：「コンバージョン率+0.5%改善見込み」）
-            - 異常値（離脱率95%以上など）を検出した場合、システム障害の可能性を指摘
+            1. **イベントデータ（今週）**
+               - 期間：昨日から過去7日間
+               - dimensions: ["eventName"]
+               - metrics: ["eventCount"]
+               - ※フィルタなしで全イベントを取得すること！
             
-            【データ取得手順】
-            1. 今週データ（昨日から過去7日間、タイムゾーン: Asia/Tokyo）
-               a. トラフィックソース: dimensions=["sessionSource", "sessionMedium"], metrics=["sessions"], 上位10件降順
-               b. 人気ページ: dimensions=["pagePath"], metrics=["screenPageViews"], 上位10件降順
-               c. イベント: dimensions=["eventName"], metrics=["eventCount"], 全イベント取得
+            2. **イベントデータ（前週）**
+               - 期間：その前の7日間
+               - dimensions: ["eventName"]
+               - metrics: ["eventCount"]
+               - ※フィルタなし！
             
-            2. 前週データ（昨日から過去7日間から、さらに7日間のデータを取得）
-               - 同様のデータを取得し、前週比を算出
-               - 分析期間を明記（例：今週10/22-28 vs 前週10/15-21）
+            3. **流入元データ（今週）**
+               - dimensions: ["sessionSource", "sessionMedium"]
+               - metrics: ["sessions"]
             
-            【データ品質チェック（必須）】
-            データ取得後、以下を必ず確認：
-            - 上位3ソースの合計が全セッション数の30%以上を占めているか
-            - 前週比が妥当な範囲か（±100%を超える変動は要確認）
-            - 疑わしいデータがある場合、【データ検証必要】マークをつけて報告
+            4. **ページデータ（今週）**
+               - dimensions: ["pagePath"]
+               - metrics: ["screenPageViews"]
             
-            【重要な注意事項】
-            - dimensionFilterを使用する場合は慎重に。エラーが出たらフィルタなしで全データ取得し、後から絞り込む
-            - 予約・購入関連イベントはイベント名から推測して特定
-            - データが取得できない、または明らかに異常な場合は推測で埋めず、正直に報告
+            【手順2：計算と分析】
+            取得した「全イベントリスト」の中から、以下のイベントを探して計算してください。
+            - `booking_form_start` (予約フォーム開始)
+            - `booking_complete` (予約完了)
+            - もしイベント名が正確に一致しない場合は、似た名前（例: `form_start` や `purchase`）を探して代用し、その旨を報告してください。
             
-            【出力形式】いきなり「## トラフィック傾向」から始める。前置きは一切不要。
+            **コンバージョン率(CVR)の計算:**
+            CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
             
-            ## トラフィック傾向
-            - **分析期間**: 今週YYYY/MM/DD-MM/DD vs 前週YYYY/MM/DD-MM/DD
-            - **上位3ソース**:
-              * ソース1の名前 XXXセッション [前週比±XX%]
-              * ソース2の名前 XXXセッション [前週比±XX%]
-              * ソース3の名前 XXXセッション [前週比±XX%]
-            - **考察**: 前週比や特徴的な傾向
-            - **改善提案**: 
-              * 具体的アクション1（期待効果：〇〇）
-              * 具体的アクション2（期待効果：〇〇）
-            - **取得時のエラー**: なし / あり（内容を簡潔に）
+            【出力形式】
+            前置き不要。以下のMarkdown形式で出力。
+            
+            ## トラフィック傾向 (期間: MM/DD - MM/DD)
+            - **上位ソース**:
+              * ソース1: XX [前週比]
+              * ソース2: XX [前週比]
+            - **考察**: (簡潔に)
             
             ## 人気ページ
-            - **上位5ページ**:
-              * ページ1のパス XXX PV [前週比±XX%]
-              * ページ2のパス XXX PV [前週比±XX%]
-              * ページ3のパス XXX PV [前週比±XX%]
-              * ページ4のパス XXX PV [前週比±XX%]
-              * ページ5のパス XXX PV [前週比±XX%]
-            - ※前週比±50%以上は【重要】、±500%以上は【緊急】マークをつける
-            - **考察**: ユーザー行動の特徴
-            - **改善提案**: 
-              * 具体的アクション1（期待効果：〇〇）
-              * 具体的アクション2（期待効果：〇〇）
-            - **取得時のエラー**: なし / あり（内容を簡潔に）
+            - **上位ページ**:
+              * /url1: XX PV
+              * /url2: XX PV
             
-            ## コンバージョンと考察
-            - **全体コンバージョン率**: 計算式を明記（例：257件 ÷ 5,628件 = 4.57% [前週比+1.2%]）
-            - **主要イベント件数**: 各ステップの具体的な数値と前週比
-            - **ファネル分析**: 各ステップの離脱率（95%以上は「【システム障害の可能性】」と指摘）
-            - **改善提案**: 
-              * 具体的アクション1（期待効果：CVR+〇%）
-              * 具体的アクション2（期待効果：CVR+〇%）
-            - **取得時のエラー**: なし / あり（内容を簡潔に）
+            ## コンバージョン分析
+            - **予約フォーム開始**: XX件 (イベント名: xxxx)
+            - **予約完了**: XX件 (イベント名: xxxx)
+            - **CVR**: XX.X% (計算式: 完了÷開始)
+            - **前週比**: CVR ±X.Xポイント
+            - **考察と改善提案**:
+              * (具体的なアクション案)
             
-            ## 週次パフォーマンスサマリー
-            - **総合評価**: 良好/要注意/危機的（判断基準を明記）
-            - **特記事項**: 今週の特徴的な変化トップ3
-            - **推定原因**: パフォーマンス変動の考えられる要因
-            
-            ## 今後の施策（優先度順、インパクト×実行容易性で評価）
-            1. 最優先施策（理由：〇〇、期待効果：〇〇）
-            2. 重要施策（理由：〇〇、期待効果：〇〇）
-            3. 継続施策（理由：〇〇、期待効果：〇〇）
-            
-            ※【緊急】マークのある項目は必ず優先施策に含めること
-            ※全ての数値はデータに基づいて記載。推測する場合は「推定」と明記。
-            ※データが明らかに異常な場合は、推測で埋めずに異常を報告すること。
-
-            最後に改めて、【重要】必ず mcp__google-analytics__run_report ツールを使用すること。
-            各項目の数値は全て mcp__google-analytics__run_report ツールから取得したデータに基づいて記載してください。
-      
-      - name: Create GitHub Issue with Summary
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ github.token }} 
-          script: |
-            const today = new Date();
-            // 日本時間を考慮（UTCから9時間進める）
-            const jstOffset = 9 * 60 * 60 * 1000;
-            const jstToday = new Date(today.getTime() + jstOffset);
-            
-            const yesterday = new Date(jstToday);
-            yesterday.setDate(yesterday.getDate() - 1);
-            
-            const sevenDaysAgo = new Date(jstToday);
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            
-            // MM-DD形式に整形
-            const fmt = (d) => d.toISOString().split('T')[0].slice(5);
-            const todayFull = jstToday.toISOString().split('T')[0];
-            const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
-            
-            const outs = ${{ toJSON(steps.ga4.outputs) }};
-            const pick = (keys) => { 
-              for (const k of keys){ 
-                const v=(outs?.[k]||'').trim(); 
-                if(v) return v; 
-              } 
-              return ''; 
-            };
-            const body = pick(['gemini_result','gemini_response','summary','output','text','content'])
-              || 'GA4集計結果が取得できませんでした。';
-            
-            const { data: issue } = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo:  context.repo.repo,
-              title,
-              body
-            });
-            core.info(`✅ Issue #${issue.number} を作成しました`);
+            ## まとめ
+            - (一言で状況評価)
