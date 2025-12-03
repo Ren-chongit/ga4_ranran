@@ -20,24 +20,29 @@ jobs:
           node-version: '20'
 
       # 3. 【解決策】Gemini CLIを「グローバル」にインストールします
-      # これにより、現在のフォルダ(カレントディレクトリ)に node_modules が生成されなくなり、
-      # Geminiが読み込むファイルが「ゼロ」になります。
+      # これにより、現在のフォルダに node_modules が生成されなくなり、
+      # Geminiが読み込むファイルが「ゼロ」になります（トークンエラーの完全回避）。
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. MCP設定ファイルの作成
-      - name: Create settings.json
+      # 4. 設定ファイルを「ホームディレクトリ」に作成します
+      # Gemini CLIは ~/.gemini/settings.json を自動的に読み込みます（--settingsフラグは不要）
+      - name: Configure Gemini Settings
         run: |
-          cat <<EOF > settings.json
+          # 設定フォルダの作成
+          mkdir -p ~/.gemini
+          
+          # settings.json の作成（環境変数は実行時に展開されます）
+          cat <<EOF > ~/.gemini/settings.json
           {
             "mcpServers": {
               "google-analytics": {
                 "command": "npx",
                 "args": ["-y", "mcp-server-google-analytics"],
                 "env": {
-                  "GOOGLE_CLIENT_EMAIL": "${{ secrets.GOOGLE_CLIENT_EMAIL }}",
-                  "GOOGLE_PRIVATE_KEY": ${{ toJSON(secrets.GOOGLE_PRIVATE_KEY) }},
-                  "GA_PROPERTY_ID": "${{ secrets.GA_PROPERTY_ID }}"
+                  "GOOGLE_CLIENT_EMAIL": "\${GOOGLE_CLIENT_EMAIL}",
+                  "GOOGLE_PRIVATE_KEY": "\${GOOGLE_PRIVATE_KEY}",
+                  "GA_PROPERTY_ID": "\${GA_PROPERTY_ID}"
                 }
               }
             },
@@ -45,8 +50,8 @@ jobs:
           }
           EOF
 
-      # 5. プロンプトファイルの作成
-      - name: Create prompt.txt
+      # 5. プロンプト（指示書）の作成
+      - name: Create Prompt File
         run: |
           cat <<EOF > prompt.txt
           あなたはプロのGA4データアナリストです。
@@ -104,15 +109,18 @@ jobs:
           - 上位50件のデータから抽出しました。
           EOF
 
-      # 6. Geminiの実行（手動実行）
-      # 空の workspace ディレクトリで実行することで、読み込み対象を完全に無くします
+      # 6. Geminiの実行
+      # 環境変数を渡しながら、作成したプロンプトを読ませます
       - name: Run Gemini
         id: gemini_run
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
-          # 実行結果を result.md に保存
-          gemini run "$(cat prompt.txt)" --settings settings.json > result.md
+          # Geminiを実行し、結果を result.md に保存
+          gemini -m gemini-2.5-flash "$(cat prompt.txt)" > result.md
           
           # 結果を環境変数に格納（次のステップで使用するため）
           echo "GEMINI_RESPONSE<<EOF" >> $GITHUB_ENV
