@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. リポジトリ読み込み回避
+      # 1. リポジトリ読み込み回避（トークン対策）
 
       # 2. Node.jsのセットアップ
       - name: Setup Node.js
@@ -23,8 +23,7 @@ jobs:
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 作業用ディレクトリの作成
-      # 以前の失敗（node_modules読み込み）をここで完全に防ぎます
+      # 4. 作業用ディレクトリの作成（必須）
       - name: Prepare Clean Workspace
         run: |
           mkdir -p work_dir
@@ -47,9 +46,9 @@ jobs:
           }
           EOF
 
-      # 6. プロンプト作成（安全対策済み）
-      # 「Top 20」という言葉を使うことで、AIが内部的にうまくデータを絞ってくれるよう誘導します。
-      # ツール側のlimit引数が使えなくても、AIへの指示でデータ量を制御します。
+      # 6. プロンプト作成（データ量削減版）
+      # 【重要】データ爆発の原因となる「pagePath（ページ分析）」を削除しました。
+      # イベントデータ（CVR）と流入元だけに絞ることで、確実に制限内に収めます。
       - name: Create Prompt File
         run: |
           TODAY=$(date +%Y-%m-%d)
@@ -60,57 +59,57 @@ jobs:
 
           cat <<EOF > work_dir/prompt.txt
           あなたはプロのWebマーケティングコンサルタントです。
-          クライアントのために、要点を絞ったGA4アクセス解析レポートを作成してください。
+          クライアントのために、**コンバージョン分析を中心とした**GA4レポートを作成してください。
 
           【分析対象期間】
           - 今週: $START_THIS から $END_THIS
           - 前週: $START_LAST から $END_LAST
 
-          【重要：トークン超過を防ぐための制約】
-          データ取得の際は、**「上位の主要なデータのみ」**を取得し、決して全データを取得しないでください。
-          各項目につき **「最大20行程度」** のデータがあれば十分です。
+          【指示：データ取得】
+          mcp__google-analytics__run_report ツールを使い、「今週」と「前週」のデータを取得してください。
+          ※データ量を抑えるため、以下の項目のみを取得すること。
 
-          【指示：データ取得と分析】
-          mcp__google-analytics__run_report ツールを使い、「今週」と「前週」のデータを取得・比較してください。
-
-          1. **トラフィック分析 (Top 20)**
+          1. **トラフィック流入元**
              - dimensions: ["sessionSource"]
              - metrics: ["sessions"]
-             - 主要な流入元の増減を確認してください。
+             - ※主要な流入元の変化を見ます。
 
-          2. **人気ページ分析 (Top 20)**
-             - dimensions: ["pagePath"]
-             - metrics: ["screenPageViews"]
-             - ※全ページではなく、アクセスの多い上位ページのみに注目してください。
-
-          3. **コンバージョン分析**
+          2. **コンバージョン（イベント）**
              - dimensions: ["eventName"]
              - metrics: ["eventCount"]
-             - 以下のイベントを探して計算してください：
-               - 予約開始 (booking_form_start 等)
-               - 予約完了 (booking_complete 等)
-             - CVR = (完了数 ÷ 開始数) × 100
+             - ※ここから予約数などを計算します。
+             
+          **【重要】「pagePath（ページ別データ）」は絶対に取得しないでください。データ量が多すぎてエラーになります。**
+
+          【指示：分析と計算】
+          取得したデータを比較し、以下を算出してください。
+
+          1. **コンバージョン率(CVR)**
+             - 「booking_form_start（予約開始）」と「booking_complete（予約完了）」を探す。
+             - なければ似たイベント名（例: form_start, purchase等）を使用。
+             - CVR = (予約完了数 ÷ 予約開始数) × 100
+             - 前週との比較も行うこと。
 
           【出力フォーマット】
           Markdown形式で出力してください。
 
           ***
-          # 📊 アクセス解析レポート ($START_THIS - $END_THIS)
+          # 📊 週間アクセス解析レポート ($START_THIS - $END_THIS)
           
-          ## 1. トラフィックと人気ページ
-          - **主要な流入元**:
-            * [ソース名]: [セッション数] (前週比: 考察)
-          - **人気ページ**:
-            * [パス]: [PV数] (前週比: 考察)
+          ## 1. コンバージョン成果 (最重要)
+          - **全体CVR**: [XX%] (前週比: ±XXポイント)
+          - **予約フォーム開始**: [XX件] (前週比: ±XX%)
+          - **予約完了**: [XX件] (前週比: ±XX%)
+          - **ファネル分析**: (完了率や離脱率についてのコメント)
           
-          ## 2. コンバージョン成果
-          - **予約フォーム開始**: [件数] (前週比)
-          - **予約完了**: [件数] (前週比)
-          - **CVR**: [XX%] (前週比)
+          ## 2. トラフィック傾向
+          - **トップ流入元**: 
+            * [ソース名]: [セッション数] (前週比)
+          - **考察**: (流入元の変化とCVRへの影響について)
           
-          ## 3. まとめと改善提案
-          - **総評**:
-          - **具体的な改善アクション**:
+          ## 3. まとめと次週のアクション
+          - **状況**: (良好/横ばい/低下)
+          - **アクション**: (具体的な改善案を1つ)
           ***
           EOF
 
@@ -144,7 +143,7 @@ jobs:
             const jstToday = new Date(today.getTime() + jstOffset);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            const title = `(${todayFull}) GA4アクセス解析レポート`;
+            const title = `(${todayFull}) GA4コンバージョン解析レポート`;
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
