@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. リポジトリ読み込み回避（トークン対策）
+      # 1. リポジトリ読み込み回避（トークン対策の基本）
 
       # 2. Node.jsのセットアップ
       - name: Setup Node.js
@@ -19,16 +19,24 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. Gemini CLIをグローバルインストール（トークン対策）
+      # 3. Gemini CLIをグローバルインストール
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 設定ファイルの作成
+      # 4. 作業用ディレクトリの作成と保護
+      # ここで「全てのファイルを無視(.geminiignore)」設定を行い、
+      # ツールが生成する一時ファイルなどをAIが読み込んで自爆するのを防ぎます。
+      - name: Prepare Clean Workspace
+        run: |
+          mkdir -p work_dir
+          cd work_dir
+          echo "*" > .geminiignore
+          echo "Created .geminiignore to ignore ALL files in context."
+
+      # 5. 設定ファイルの作成（~/.gemini/settings.json）
       - name: Configure Gemini Settings
         run: |
           mkdir -p ~/.gemini
-          
-          # シンプルな設定ファイル
           cat <<EOF > ~/.gemini/settings.json
           {
             "mcpServers": {
@@ -41,20 +49,21 @@ jobs:
           }
           EOF
 
-      # 5. プロンプト（指示書）の作成
-      # 【修正】エラーの原因だった「limit」の指定を完全に削除しました。
+      # 6. プロンプト（指示書）の作成
+      # 【重要】データ爆発の原因となる「pagePath」の取得を削除しました。
+      # これでデータ量が劇的に減り、Quotaエラーを回避できます。
       - name: Create Prompt File
         run: |
-          cat <<EOF > prompt.txt
+          cat <<EOF > work_dir/prompt.txt
           あなたはプロのGA4データアナリストです。
           
           【重要】
           1. dimensionFilter（フィルタ機能）は使用禁止です。
-          2. **件数制限（limit）の指定も不要です。** デフォルトのまま取得してください。
+          2. limit（件数制限）の指定も不要です。
           
           【手順1：データの取得】
           以下のデータを mcp__google-analytics__run_report ツールで取得してください。
-          ※引数は dimensions, metrics, dateRanges のみを使用してください。
+          ※データ量を抑えるため、**ページ分析（pagePath）は行わないでください。**
           
           1. **イベントデータ（今週）**
              - 期間：昨日から過去7日間
@@ -65,10 +74,6 @@ jobs:
              - dimensions: ["sessionSource"]
              - metrics: ["sessions"]
           
-          3. **ページデータ（今週）**
-             - dimensions: ["pagePath"]
-             - metrics: ["screenPageViews"]
-          
           【手順2：計算と分析】
           取得したデータから以下を計算し、レポートを作成してください。
           
@@ -78,11 +83,21 @@ jobs:
           
           【出力形式】
           Markdown形式で、GitHub Issueにそのまま貼れる形式で出力してください。
+          
+          ## 📊 アクセス解析レポート (MM/DD - MM/DD)
+          
+          ### 1. 概要
+          - **トップ流入元**: (上位のソースを記載)
+          
+          ### 2. コンバージョン分析
+          - **予約フォーム開始**: XX件
+          - **予約完了**: XX件
+          - **CVR**: XX.X%
+          - **考察**: (数値に基づく短いコメント)
           EOF
 
-      # 6. Geminiの実行
-      # --yolo オプションは維持。
-      # 認証情報はここで環境変数として渡します。
+      # 7. Geminiの実行
+      # work_dir に移動してから実行することで、クリーンな環境を保ちます
       - name: Run Gemini
         id: gemini_run
         env:
@@ -91,7 +106,9 @@ jobs:
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
-          # Geminiを実行
+          cd work_dir
+          
+          # Geminiを実行 (--yoloで自動承認)
           gemini -m gemini-2.5-flash --yolo "$(cat prompt.txt)" > result.md
           
           # 結果を環境変数に格納
@@ -99,7 +116,7 @@ jobs:
           cat result.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      # 7. Issueの作成
+      # 8. Issueの作成
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
         with:
