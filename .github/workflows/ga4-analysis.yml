@@ -11,28 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. コード読み込み回避（必須）
+      # 1. 読み込み回避
 
-      # 2. Node.jsセットアップ
+      # 2. Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       # 3. Gemini CLI グローバルインストール
-      # node_modules読み込み事故を防ぐ最強の布陣です
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 作業用ディレクトリの作成
-      # ここで * (全ファイル) を無視設定にし、確実にクリーンな環境を作ります
+      # 4. 作業ディレクトリ作成
       - name: Prepare Clean Workspace
         run: |
           mkdir -p work_dir
           cd work_dir
           echo "*" > .geminiignore
 
-      # 5. 設定ファイルの作成
+      # 5. 設定ファイル作成
       - name: Configure Gemini Settings
         run: |
           mkdir -p ~/.gemini
@@ -48,9 +46,9 @@ jobs:
           }
           EOF
 
-      # 6. 【決定版】リッチ＆安全プロンプト
-      # ページ分析(pagePath)を除外し、代わりに「地域」「デバイス」を追加。
-      # これによりデータ量を爆発させずに、レポートの密度を高めます。
+      # 6. 【最終安全版】チャネルグループ分析プロンプト
+      # 「sessionSource」(数千件ある) をやめ、「sessionDefaultChannelGroup」(約10件しかない) に変更しました。
+      # これによりデータ爆発を物理的に防ぎます。CVR計算に必要なイベントデータは維持します。
       - name: Create Prompt File
         run: |
           TODAY=$(date +%Y-%m-%d)
@@ -60,67 +58,57 @@ jobs:
           END_LAST=$(date -d "8 days ago" +%Y-%m-%d)
 
           cat <<EOF > work_dir/prompt.txt
-          あなたは熟練のWebマーケティングコンサルタントです。
-          以下のデータに基づき、**「比較」と「インサイト」に富んだ詳細なレポート**を作成してください。
+          あなたはWebマーケティングコンサルタントです。
+          以下のデータに基づき、コンバージョンを中心とした週次レポートを作成してください。
 
           【分析対象期間】
           - 今週: $START_THIS から $END_THIS
           - 前週: $START_LAST から $END_LAST
 
           【指示：データ取得】
-          mcp__google-analytics__run_report を使い、「今週」と「前週」のデータを取得・比較してください。
-          **※ページ分析（pagePath）はデータ過多によりエラーになるため取得禁止です。**
-          代わりに以下の「属性データ」を取得して分析を深めてください。
-
-          1. **流入チャネル詳細**
-             - dimensions: ["sessionSource", "sessionMedium"]
-             - metrics: ["sessions"]
+          mcp__google-analytics__run_report を使い、「今週」と「前週」のデータを取得してください。
           
-          2. **ユーザー属性（地域・デバイス）**
-             - dimensions: ["city", "deviceCategory"]
-             - metrics: ["sessions"]
-             - ※「どの地域からのアクセスが増えたか」「スマホ比率はどうか」を分析します。
+          ★重要：データ量を最小化するため、以下の指標のみを取得してください。
           
-          3. **コンバージョン詳細**
+          1. **チャネル別トラフィック（超軽量）**
+             - dimensions: ["sessionDefaultChannelGroup"]
+             - metrics: ["sessions"]
+             - ※「Organic Search」「Paid Search」などの大枠のトレンドを見ます。
+          
+          2. **イベント・コンバージョン**
              - dimensions: ["eventName"]
              - metrics: ["eventCount"]
+             - ※ここからCVRを計算します。
 
           【指示：分析と計算】
-          1. **前週比の算出**: 
-             - 主要な数値について (今週-前週)÷前週×100 で増減率を出し、「+XX%」「-XX%」と明記してください。
+          1. **前週比**: 
+             - (今週-前週)÷前週×100 で増減率を算出。
           
           2. **CVRとファネル**:
-             - CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
-             - 「予約開始」から「完了」までの離脱率も計算してください。
+             - 予約開始: "booking_form_start" (または form_start 等の類似イベント)
+             - 予約完了: "booking_complete" (または purchase 等の類似イベント)
+             - CVR = (完了数 ÷ 開始数) × 100
 
           【出力フォーマット】
           Markdown形式で出力してください。
 
           ***
-          # 📈 週次アクセス解析レポート ($START_THIS 〜 $END_THIS)
+          # 📉 週次アクセス解析レポート ($START_THIS 〜 $END_THIS)
           
-          ## 1. エグゼクティブサマリー
-          - **総合評価**: (例: 良好 / 要改善)
-          - **トピックス**: (今週の最も大きな変化を1行で)
+          ## 1. コンバージョン成果 (最重要)
+          - **全体CVR**: **[XX.X%]** (前週比: ±XXpt)
+          - **予約フォーム開始**: [XX件] (前週比: ±XX%)
+          - **予約完了**: [XX件] (前週比: ±XX%)
+          - **考察**: (数値の変化とその要因)
           
-          ## 2. コンバージョン・パフォーマンス (最重要)
-          - **全体CVR**: **[XX.X%]** (前週比: ±XXポイント)
-          - **ファネル詳細**:
-            * 🏁 予約フォーム開始: [件数] (前週比: ±XX%)
-            * 🚩 予約完了: [件数] (前週比: ±XX%)
-          - **考察**: (CVRの変化要因について)
+          ## 2. チャネル別トラフィック
+          - **主な流入経路**:
+            * [チャネル名]: [セッション数] (前週比: ±XX%)
+            * ...
+          - **考察**: (検索や広告など、どのチャネルが好調か)
           
-          ## 3. ユーザー属性と流入の変化
-          - **地域別トレンド**:
-            * (例: 大阪からのアクセスが急増しています等)
-          - **デバイス比率**:
-            * Mobile: [XX%], Desktop: [XX%]
-          - **主要流入元**:
-            * [ソース名]: [セッション数] (前週比: ±XX%)
-          
-          ## 4. 今後のアクションプラン
-          - **課題**: 
-          - **具体的施策**: (来週やるべきこと)
+          ## 3. 今後の対策
+          - **アクション**: (具体的な改善案を1つ)
           ***
           EOF
 
@@ -134,11 +122,8 @@ jobs:
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
           cd work_dir
-          
-          # Geminiを実行 (--yoloで自動承認)
           gemini -m gemini-2.5-flash --yolo "$(cat prompt.txt)" > result.md
           
-          # 結果を環境変数に格納
           echo "GEMINI_RESPONSE<<EOF" >> $GITHUB_ENV
           cat result.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
@@ -154,7 +139,7 @@ jobs:
             const jstToday = new Date(today.getTime() + jstOffset);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            const title = `(${todayFull}) 📊 GA4詳細解析レポート`;
+            const title = `(${todayFull}) GA4チャネル別解析レポート`;
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
