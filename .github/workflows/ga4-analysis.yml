@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. コードはチェックアウトしません（リポジトリ読み込み回避）
+      # 1. リポジトリ読み込み回避（トークン対策）
 
       # 2. Node.jsのセットアップ
       - name: Setup Node.js
@@ -19,18 +19,16 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. Gemini CLIをグローバルインストール
-      # トークンエラー回避のための必須設定
+      # 3. Gemini CLIをグローバルインストール（トークン対策）
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 設定ファイルの作成（~/.gemini/settings.json）
-      # 【修正】env設定を削除し、プロセス環境変数から直接読み込ませるように変更（認証トラブル回避）
+      # 4. 設定ファイルの作成
       - name: Configure Gemini Settings
         run: |
           mkdir -p ~/.gemini
           
-          # シンプルな設定ファイルを作成
+          # シンプルな設定ファイル
           cat <<EOF > ~/.gemini/settings.json
           {
             "mcpServers": {
@@ -44,19 +42,19 @@ jobs:
           EOF
 
       # 5. プロンプト（指示書）の作成
-      # 【修正】「limit: 50」の指示を削除しました。これでAIが困らなくなります。
+      # 【修正】エラーの原因だった「limit」の指定を完全に削除しました。
       - name: Create Prompt File
         run: |
           cat <<EOF > prompt.txt
           あなたはプロのGA4データアナリストです。
           
           【重要】
-          1. **dimensionFilter（フィルタ機能）は使用禁止です。**
-          2. **limit（件数制限）の指定も不要です。** デフォルトの件数で取得してください。
+          1. dimensionFilter（フィルタ機能）は使用禁止です。
+          2. **件数制限（limit）の指定も不要です。** デフォルトのまま取得してください。
           
           【手順1：データの取得】
           以下のデータを mcp__google-analytics__run_report ツールで取得してください。
-          ※引数は dimensions, metrics, dateRanges のみにしてください。
+          ※引数は dimensions, metrics, dateRanges のみを使用してください。
           
           1. **イベントデータ（今週）**
              - 期間：昨日から過去7日間
@@ -84,7 +82,7 @@ jobs:
 
       # 6. Geminiの実行
       # --yolo オプションは維持。
-      # ここで環境変数を渡すことで、MCPサーバーが認証情報を受け取れます。
+      # 認証情報はここで環境変数として渡します。
       - name: Run Gemini
         id: gemini_run
         env:
