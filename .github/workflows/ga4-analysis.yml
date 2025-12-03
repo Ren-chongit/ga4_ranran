@@ -149,7 +149,7 @@ jobs:
             const jstToday = new Date(today.getTime() + jstOffset);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            const title = `(${todayFull}) 📊 GA4詳細解析レポート`;
+            const title = const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
