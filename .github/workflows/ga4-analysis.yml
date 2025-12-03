@@ -11,15 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. コードはチェックアウトしません（リポジトリ読み込み回避）
+      # 1. チェックアウトなし（維持）
 
-      # 2. 【最重要】実行中に生成される node_modules をGeminiに読ませない設定
-      # これがないと、ツール自体のインストールファイル(500個以上)を読み込んでエラーになります
-      - name: Create .geminiignore to block node_modules
+      # 2. 【ここが修正版の核です】
+      # "node_modules" だけでなく "*" (アスタリスク) を指定して
+      # 全てのファイルを強制的に無視させます。これでGeminiは何も見えなくなります。
+      - name: Create .geminiignore to BLOCK EVERYTHING
         run: |
-          echo "node_modules/" > .geminiignore
-          echo ".git/" >> .geminiignore
-          echo "Generating .geminiignore to prevent token explosion."
+          echo "*" > .geminiignore
+          echo "Created .geminiignore with '*' to ignore ALL files."
           cat .geminiignore
 
       # 3. MCPサーバーの準備
@@ -108,3 +108,43 @@ jobs:
             
             ### 3. データ取得メモ
             - 上位50件のデータから抽出しました。
+      
+      - name: Create GitHub Issue with Summary
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }} 
+          script: |
+            const today = new Date();
+            // 日本時間を考慮（UTCから9時間進める）
+            const jstOffset = 9 * 60 * 60 * 1000;
+            const jstToday = new Date(today.getTime() + jstOffset);
+            
+            const yesterday = new Date(jstToday);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            const sevenDaysAgo = new Date(jstToday);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            // MM-DD形式に整形
+            const fmt = (d) => d.toISOString().split('T')[0].slice(5);
+            const todayFull = jstToday.toISOString().split('T')[0];
+            const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
+            
+            const outs = ${{ toJSON(steps.ga4.outputs) }};
+            const pick = (keys) => { 
+              for (const k of keys){ 
+                const v=(outs?.[k]||'').trim(); 
+                if(v) return v; 
+              } 
+              return ''; 
+            };
+            const body = pick(['gemini_result','gemini_response','summary','output','text','content'])
+              || 'GA4集計結果が取得できませんでした。';
+            
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title,
+              body
+            });
+            core.info(`✅ Issue #${issue.number} を作成しました`);
