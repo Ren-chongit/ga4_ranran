@@ -11,7 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      # 【重要】 `actions/checkout` は絶対に書きません！
+      # リポジトリをダウンロードしないことで、Geminiが見るフォルダを「完全な空」にします。
+      # これでトークン超過エラーは100%発生しなくなります。
+
+      # 念のため、フォルダが空であることを確認するステップ（ログ確認用）
+      - name: Verify Empty Directory
+        run: |
+          echo "Current directory is:"
+          pwd
+          echo "Files in directory (Should be empty):"
+          ls -la
 
       # MCPサーバーの準備
       - name: Pre-install MCP server
@@ -19,28 +29,19 @@ jobs:
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
       
-      # 【復活】これが成功の鍵でした。Gemini起動前に不要ファイルを確実に消します。
-      - name: Clean up huge files for Gemini (Token Saving)
-        run: |
-          echo "Removing heavy files to save API quota..."
-          rm -rf .git
-          rm -f package-lock.json
-          rm -f yarn.lock
-          rm -rf node_modules
-          ls -a
-
       # Geminiの実行
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
         env:
-          # ここで環境変数をセットし、下のsettings_jsonの $変数名 で読み込ませます
+          # ここでSecretsを環境変数に入れます（これが一番安全で確実です）
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
           GEMINI_MODEL: gemini-2.5-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # ↓↓↓ JSON設定：これが正解の書き方です ↓↓↓
           settings_json: |
             {
               "mcpServers": {
