@@ -11,15 +11,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # リポジトリ読み込みなし（トークン節約の鉄則）
+      # 1. コードはチェックアウトしません（リポジトリ読み込み回避）
 
-      # MCPサーバーの準備
+      # 2. 【最重要】実行中に生成される node_modules をGeminiに読ませない設定
+      # これがないと、ツール自体のインストールファイル(500個以上)を読み込んでエラーになります
+      - name: Create .geminiignore to block node_modules
+        run: |
+          echo "node_modules/" > .geminiignore
+          echo ".git/" >> .geminiignore
+          echo "Generating .geminiignore to prevent token explosion."
+          cat .geminiignore
+
+      # 3. MCPサーバーの準備
       - name: Pre-install MCP server
         run: |
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
       
-      # Geminiの実行
+      # 4. Geminiの実行
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
@@ -48,65 +57,54 @@ jobs:
           prompt: |
             あなたはプロのGA4データアナリストです。
             
-            【超重要：APIエラー回避のための絶対ルール】
-            1. **dimensionFilter（フィルタ機能）は絶対に使用禁止です。**
-               - フィルタを使おうとするとAPIエラーになり、処理が停止します。
-               - 特定のイベントが見たい場合でも、必ず「全イベント」を取得してから、あなたの頭脳で必要な行を探してください。
-            2. データ取得は必ず `mcp__google-analytics__run_report` ツールを使用してください。
+            【重要：APIエラーとトークン超過を防ぐための鉄の掟】
+            1. **dimensionFilter（フィルタ機能）は使用禁止です。** APIエラーの原因になります。
+            2. データの取得件数は、必ず **limit: 50** を指定して制限してください。全件取得は禁止です。
             
             【手順1：データの取得】
-            以下のデータを、フィルタなしで広範囲に取得してください。
+            以下のデータを `mcp__google-analytics__run_report` ツールで取得してください。
+            ※引数には必ず `"limit": "50"` を含めること。
             
             1. **イベントデータ（今週）**
                - 期間：昨日から過去7日間
                - dimensions: ["eventName"]
                - metrics: ["eventCount"]
-               - ※フィルタなしで全イベントを取得すること！
+               - limit: 50
             
-            2. **イベントデータ（前週）**
-               - 期間：その前の7日間
-               - dimensions: ["eventName"]
-               - metrics: ["eventCount"]
-               - ※フィルタなし！
-            
-            3. **流入元データ（今週）**
-               - dimensions: ["sessionSource", "sessionMedium"]
+            2. **流入元データ（今週）**
+               - dimensions: ["sessionSource"]
                - metrics: ["sessions"]
+               - limit: 20
             
-            4. **ページデータ（今週）**
+            3. **ページデータ（今週）**
                - dimensions: ["pagePath"]
                - metrics: ["screenPageViews"]
+               - limit: 20
             
             【手順2：計算と分析】
-            取得した「全イベントリスト」の中から、以下のイベントを探して計算してください。
+            取得した上位50件のイベントリストの中から、以下のイベントを探して計算してください。
+            リストにない場合は「データなし（ランク外）」として扱ってください。
+            
             - `booking_form_start` (予約フォーム開始)
             - `booking_complete` (予約完了)
-            - もしイベント名が正確に一致しない場合は、似た名前（例: `form_start` や `purchase`）を探して代用し、その旨を報告してください。
             
             **コンバージョン率(CVR)の計算:**
             CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
             
             【出力形式】
-            前置き不要。以下のMarkdown形式で出力。
+            GitHub Issueの本文として使えるMarkdown形式で出力。
             
-            ## トラフィック傾向 (期間: MM/DD - MM/DD)
-            - **上位ソース**:
-              * ソース1: XX [前週比]
-              * ソース2: XX [前週比]
-            - **考察**: (簡潔に)
+            ## 📊 アクセス解析レポート (MM/DD - MM/DD)
             
-            ## 人気ページ
-            - **上位ページ**:
-              * /url1: XX PV
-              * /url2: XX PV
+            ### 1. トラフィックと人気ページ
+            - **トップ流入元**: (上位のソースとセッション数を記載)
+            - **人気ページ**: (上位のパスとPV数を記載)
             
-            ## コンバージョン分析
-            - **予約フォーム開始**: XX件 (イベント名: xxxx)
-            - **予約完了**: XX件 (イベント名: xxxx)
-            - **CVR**: XX.X% (計算式: 完了÷開始)
-            - **前週比**: CVR ±X.Xポイント
-            - **考察と改善提案**:
-              * (具体的なアクション案)
+            ### 2. コンバージョン分析
+            - **予約フォーム開始**: XX件
+            - **予約完了**: XX件
+            - **CVR**: XX.X%
+            - **考察**: (数値に基づく短いコメント)
             
-            ## まとめ
-            - (一言で状況評価)
+            ### 3. データ取得メモ
+            - 上位50件のデータから抽出しました。
