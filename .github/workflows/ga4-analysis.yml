@@ -13,23 +13,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 【最強の対策】フォルダの中身を全て消去します
+      # これによりGeminiは余計なファイルを一切読み込めなくなり、トークンエラーが確実に消えます
+      - name: Nuke all files to save API quota
+        run: |
+          echo "Deleting ALL files to ensure clean context for Gemini..."
+          # 隠しファイル(.gitなど)も含めて全て削除
+          rm -rf .git
+          rm -rf .github
+          rm -rf *
+          # 確認用：何も表示されなければOK
+          ls -a
+
       # MCPサーバーの準備
       - name: Pre-install MCP server
         run: |
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
       
-      # 【重要】ここが消えていました！Gemini起動前に重いファイルを削除するステップ
-      - name: Clean up huge files for Gemini (Token Saving)
-        run: |
-          echo "Removing heavy files to save API quota..."
-          rm -rf .git
-          rm -f package-lock.json
-          rm -f yarn.lock
-          rm -rf node_modules
-          ls -a
-
-      # Geminiの実行（設定JSON修正済み）
+      # Geminiの実行
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
@@ -40,7 +42,6 @@ jobs:
           GEMINI_MODEL: gemini-2.5-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # ↓↓↓ ここが修正済みの設定部分です ↓↓↓
           settings_json: |
             {
               "mcpServers": {
