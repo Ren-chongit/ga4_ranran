@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. リポジトリ読み込み回避（トークン対策）
+      # 1. リポジトリ読み込み回避
 
       # 2. Node.jsのセットアップ
       - name: Setup Node.js
@@ -19,11 +19,12 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. Gemini CLIをグローバルインストール（必須）
+      # 3. Gemini CLIをグローバルインストール
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 作業用ディレクトリの作成（必須）
+      # 4. 作業用ディレクトリの作成
+      # 以前の失敗（node_modules読み込み）をここで完全に防ぎます
       - name: Prepare Clean Workspace
         run: |
           mkdir -p work_dir
@@ -46,93 +47,74 @@ jobs:
           }
           EOF
 
-      # 6. 【復活】本気のプロンプト作成
-      # 以前のようなリッチな分析を行うため、指示を詳細に戻しました。
-      # ※エラー回避のため「limit」引数は使わず、デフォルト件数で取得させます（容量問題は解決済みなのでOK）
+      # 6. プロンプト作成（安全対策済み）
+      # 「Top 20」という言葉を使うことで、AIが内部的にうまくデータを絞ってくれるよう誘導します。
+      # ツール側のlimit引数が使えなくても、AIへの指示でデータ量を制御します。
       - name: Create Prompt File
         run: |
-          # 日付計算（Linuxコマンドで正確な日付を出す）
           TODAY=$(date +%Y-%m-%d)
-          # 今週（昨日〜7日前）
           START_THIS=$(date -d "7 days ago" +%Y-%m-%d)
           END_THIS=$(date -d "1 day ago" +%Y-%m-%d)
-          # 前週（8日前〜14日前）
           START_LAST=$(date -d "14 days ago" +%Y-%m-%d)
           END_LAST=$(date -d "8 days ago" +%Y-%m-%d)
 
           cat <<EOF > work_dir/prompt.txt
           あなたはプロのWebマーケティングコンサルタントです。
-          クライアントのために、詳細なGA4アクセス解析レポートを作成してください。
+          クライアントのために、要点を絞ったGA4アクセス解析レポートを作成してください。
 
           【分析対象期間】
           - 今週: $START_THIS から $END_THIS
           - 前週: $START_LAST から $END_LAST
 
-          【指示：データ取得プロセス】
-          以下のデータを mcp__google-analytics__run_report ツールを使って取得してください。
-          **重要：比較分析のため、「今週」と「前週」の2回データを取得すること。**
-          
-          1. **トラフィック流入元**
-             - dimensions: ["sessionSource", "sessionMedium"]
+          【重要：トークン超過を防ぐための制約】
+          データ取得の際は、**「上位の主要なデータのみ」**を取得し、決して全データを取得しないでください。
+          各項目につき **「最大20行程度」** のデータがあれば十分です。
+
+          【指示：データ取得と分析】
+          mcp__google-analytics__run_report ツールを使い、「今週」と「前週」のデータを取得・比較してください。
+
+          1. **トラフィック分析 (Top 20)**
+             - dimensions: ["sessionSource"]
              - metrics: ["sessions"]
-          
-          2. **人気ページランキング**
+             - 主要な流入元の増減を確認してください。
+
+          2. **人気ページ分析 (Top 20)**
              - dimensions: ["pagePath"]
              - metrics: ["screenPageViews"]
-          
-          3. **イベント・コンバージョン**
+             - ※全ページではなく、アクセスの多い上位ページのみに注目してください。
+
+          3. **コンバージョン分析**
              - dimensions: ["eventName"]
              - metrics: ["eventCount"]
-             - ※フィルタは使わず、全イベントを取得してから手元で計算すること。
+             - 以下のイベントを探して計算してください：
+               - 予約開始 (booking_form_start 等)
+               - 予約完了 (booking_complete 等)
+             - CVR = (完了数 ÷ 開始数) × 100
 
-          【指示：分析と計算】
-          取得した2つの期間のデータを比較し、以下の計算を行ってください。
-          
-          1. **前週比の算出**: (今週の数値 - 前週の数値) ÷ 前週の数値 × 100
-          2. **コンバージョン率(CVR)**: 
-             - 「booking_form_start（予約開始）」と「booking_complete（予約完了）」イベントを探す。
-             - CVR = (予約完了数 ÷ 予約開始数) × 100
-          3. **ファネル分析**:
-             - 予約開始から完了までの離脱率を計算。
-          
           【出力フォーマット】
-          以下の形式を厳守してMarkdownで出力してください。
-          
+          Markdown形式で出力してください。
+
           ***
-          # アクセス解析レポート ($START_THIS - $END_THIS)
+          # 📊 アクセス解析レポート ($START_THIS - $END_THIS)
           
-          ## 1. トラフィック傾向
-          - **分析期間**: 今週 ($START_THIS~$END_THIS) vs 前週 ($START_LAST~$END_LAST)
-          - **上位ソース**:
-            * [ソース名]: [セッション数] [前週比±XX%]
-            * [ソース名]: [セッション数] [前週比±XX%]
-          - **考察**: (流入の変化と要因について専門的な考察)
-          - **改善提案**: (具体的なアクション)
+          ## 1. トラフィックと人気ページ
+          - **主要な流入元**:
+            * [ソース名]: [セッション数] (前週比: 考察)
+          - **人気ページ**:
+            * [パス]: [PV数] (前週比: 考察)
           
-          ## 2. 人気ページ
-          - **上位ページ**:
-            * [パス]: [PV数] [前週比±XX%]
-            * [パス]: [PV数] [前週比±XX%]
-            * [パス]: [PV数] [前週比±XX%]
-          - **考察**: (どのページが伸びているか、ユーザーの興味関心)
+          ## 2. コンバージョン成果
+          - **予約フォーム開始**: [件数] (前週比)
+          - **予約完了**: [件数] (前週比)
+          - **CVR**: [XX%] (前週比)
           
-          ## 3. コンバージョンと考察
-          - **全体CVR**: [XX%] (計算式: 完了÷開始) [前週比±XXポイント]
-          - **主要イベント**:
-            * 予約フォーム開始: [件数] [前週比]
-            * 予約完了: [件数] [前週比]
-          - **ファネル分析**: 離脱率 [XX%]
-          - **改善提案**: (CVR向上のための具体的施策)
-          
-          ## 4. 週次サマリー
-          - **総合評価**: (良好/要注意など)
-          - **特記事項**:
-          - **今後の施策**: (優先度順に箇条書き)
+          ## 3. まとめと改善提案
+          - **総評**:
+          - **具体的な改善アクション**:
           ***
           EOF
 
       # 7. Geminiの実行
-      # work_dir に移動してから実行
       - name: Run Gemini
         id: gemini_run
         env:
@@ -162,7 +144,7 @@ jobs:
             const jstToday = new Date(today.getTime() + jstOffset);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            const title = `(${todayFull}) 詳細アクセス解析レポート`;
+            const title = `(${todayFull}) GA4アクセス解析レポート`;
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
