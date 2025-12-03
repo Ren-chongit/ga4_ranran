@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. リポジトリ読み込み回避（トークン対策の基本）
+      # 1. リポジトリ読み込み回避（トークン対策）
 
       # 2. Node.jsのセットアップ
       - name: Setup Node.js
@@ -19,21 +19,18 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. Gemini CLIをグローバルインストール
+      # 3. Gemini CLIをグローバルインストール（必須）
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 作業用ディレクトリの作成と保護
-      # ここで「全てのファイルを無視(.geminiignore)」設定を行い、
-      # ツールが生成する一時ファイルなどをAIが読み込んで自爆するのを防ぎます。
+      # 4. 作業用ディレクトリの作成（必須）
       - name: Prepare Clean Workspace
         run: |
           mkdir -p work_dir
           cd work_dir
           echo "*" > .geminiignore
-          echo "Created .geminiignore to ignore ALL files in context."
 
-      # 5. 設定ファイルの作成（~/.gemini/settings.json）
+      # 5. 設定ファイルの作成
       - name: Configure Gemini Settings
         run: |
           mkdir -p ~/.gemini
@@ -49,55 +46,93 @@ jobs:
           }
           EOF
 
-      # 6. プロンプト（指示書）の作成
-      # 【重要】データ爆発の原因となる「pagePath」の取得を削除しました。
-      # これでデータ量が劇的に減り、Quotaエラーを回避できます。
+      # 6. 【復活】本気のプロンプト作成
+      # 以前のようなリッチな分析を行うため、指示を詳細に戻しました。
+      # ※エラー回避のため「limit」引数は使わず、デフォルト件数で取得させます（容量問題は解決済みなのでOK）
       - name: Create Prompt File
         run: |
+          # 日付計算（Linuxコマンドで正確な日付を出す）
+          TODAY=$(date +%Y-%m-%d)
+          # 今週（昨日〜7日前）
+          START_THIS=$(date -d "7 days ago" +%Y-%m-%d)
+          END_THIS=$(date -d "1 day ago" +%Y-%m-%d)
+          # 前週（8日前〜14日前）
+          START_LAST=$(date -d "14 days ago" +%Y-%m-%d)
+          END_LAST=$(date -d "8 days ago" +%Y-%m-%d)
+
           cat <<EOF > work_dir/prompt.txt
-          あなたはプロのGA4データアナリストです。
+          あなたはプロのWebマーケティングコンサルタントです。
+          クライアントのために、詳細なGA4アクセス解析レポートを作成してください。
+
+          【分析対象期間】
+          - 今週: $START_THIS から $END_THIS
+          - 前週: $START_LAST から $END_LAST
+
+          【指示：データ取得プロセス】
+          以下のデータを mcp__google-analytics__run_report ツールを使って取得してください。
+          **重要：比較分析のため、「今週」と「前週」の2回データを取得すること。**
           
-          【重要】
-          1. dimensionFilter（フィルタ機能）は使用禁止です。
-          2. limit（件数制限）の指定も不要です。
-          
-          【手順1：データの取得】
-          以下のデータを mcp__google-analytics__run_report ツールで取得してください。
-          ※データ量を抑えるため、**ページ分析（pagePath）は行わないでください。**
-          
-          1. **イベントデータ（今週）**
-             - 期間：昨日から過去7日間
-             - dimensions: ["eventName"]
-             - metrics: ["eventCount"]
-          
-          2. **流入元データ（今週）**
-             - dimensions: ["sessionSource"]
+          1. **トラフィック流入元**
+             - dimensions: ["sessionSource", "sessionMedium"]
              - metrics: ["sessions"]
           
-          【手順2：計算と分析】
-          取得したデータから以下を計算し、レポートを作成してください。
+          2. **人気ページランキング**
+             - dimensions: ["pagePath"]
+             - metrics: ["screenPageViews"]
           
-          - 予約フォーム開始数 (booking_form_start 等。なければ似たイベントを探す)
-          - 予約完了数 (booking_complete 等)
-          - CVR = (完了数 ÷ 開始数) × 100
+          3. **イベント・コンバージョン**
+             - dimensions: ["eventName"]
+             - metrics: ["eventCount"]
+             - ※フィルタは使わず、全イベントを取得してから手元で計算すること。
+
+          【指示：分析と計算】
+          取得した2つの期間のデータを比較し、以下の計算を行ってください。
           
-          【出力形式】
-          Markdown形式で、GitHub Issueにそのまま貼れる形式で出力してください。
+          1. **前週比の算出**: (今週の数値 - 前週の数値) ÷ 前週の数値 × 100
+          2. **コンバージョン率(CVR)**: 
+             - 「booking_form_start（予約開始）」と「booking_complete（予約完了）」イベントを探す。
+             - CVR = (予約完了数 ÷ 予約開始数) × 100
+          3. **ファネル分析**:
+             - 予約開始から完了までの離脱率を計算。
           
-          ## 📊 アクセス解析レポート (MM/DD - MM/DD)
+          【出力フォーマット】
+          以下の形式を厳守してMarkdownで出力してください。
           
-          ### 1. 概要
-          - **トップ流入元**: (上位のソースを記載)
+          ***
+          # アクセス解析レポート ($START_THIS - $END_THIS)
           
-          ### 2. コンバージョン分析
-          - **予約フォーム開始**: XX件
-          - **予約完了**: XX件
-          - **CVR**: XX.X%
-          - **考察**: (数値に基づく短いコメント)
+          ## 1. トラフィック傾向
+          - **分析期間**: 今週 ($START_THIS~$END_THIS) vs 前週 ($START_LAST~$END_LAST)
+          - **上位ソース**:
+            * [ソース名]: [セッション数] [前週比±XX%]
+            * [ソース名]: [セッション数] [前週比±XX%]
+          - **考察**: (流入の変化と要因について専門的な考察)
+          - **改善提案**: (具体的なアクション)
+          
+          ## 2. 人気ページ
+          - **上位ページ**:
+            * [パス]: [PV数] [前週比±XX%]
+            * [パス]: [PV数] [前週比±XX%]
+            * [パス]: [PV数] [前週比±XX%]
+          - **考察**: (どのページが伸びているか、ユーザーの興味関心)
+          
+          ## 3. コンバージョンと考察
+          - **全体CVR**: [XX%] (計算式: 完了÷開始) [前週比±XXポイント]
+          - **主要イベント**:
+            * 予約フォーム開始: [件数] [前週比]
+            * 予約完了: [件数] [前週比]
+          - **ファネル分析**: 離脱率 [XX%]
+          - **改善提案**: (CVR向上のための具体的施策)
+          
+          ## 4. 週次サマリー
+          - **総合評価**: (良好/要注意など)
+          - **特記事項**:
+          - **今後の施策**: (優先度順に箇条書き)
+          ***
           EOF
 
       # 7. Geminiの実行
-      # work_dir に移動してから実行することで、クリーンな環境を保ちます
+      # work_dir に移動してから実行
       - name: Run Gemini
         id: gemini_run
         env:
@@ -125,17 +160,9 @@ jobs:
             const today = new Date();
             const jstOffset = 9 * 60 * 60 * 1000;
             const jstToday = new Date(today.getTime() + jstOffset);
-            
-            const yesterday = new Date(jstToday);
-            yesterday.setDate(yesterday.getDate() - 1);
-            
-            const sevenDaysAgo = new Date(jstToday);
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            
-            const fmt = (d) => d.toISOString().split('T')[0].slice(5);
             const todayFull = jstToday.toISOString().split('T')[0];
-            const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             
+            const title = `(${todayFull}) 詳細アクセス解析レポート`;
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
