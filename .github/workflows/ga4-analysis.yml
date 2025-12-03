@@ -19,11 +19,11 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. Gemini CLI グローバルインストール
+      # 3. Gemini CLI グローバルインストール (安全対策)
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 作業ディレクトリ作成
+      # 4. 作業ディレクトリ作成 (安全対策)
       - name: Prepare Clean Workspace
         run: |
           mkdir -p work_dir
@@ -46,9 +46,10 @@ jobs:
           }
           EOF
 
-      # 6. 【最終安全版】チャネルグループ分析プロンプト
-      # 「sessionSource」(数千件ある) をやめ、「sessionDefaultChannelGroup」(約10件しかない) に変更しました。
-      # これによりデータ爆発を物理的に防ぎます。CVR計算に必要なイベントデータは維持します。
+      # 6. 【リッチ化フェーズ1】プロンプトのアップグレード
+      # ・チャネルグループをやめ、「sessionSource / sessionMedium」に戻します（詳細化）
+      # ・「deviceCategory（デバイス）」と「city（都市）」を追加します（多角化）
+      # ・ページ分析はまだ危険なので入れません。
       - name: Create Prompt File
         run: |
           TODAY=$(date +%Y-%m-%d)
@@ -58,8 +59,8 @@ jobs:
           END_LAST=$(date -d "8 days ago" +%Y-%m-%d)
 
           cat <<EOF > work_dir/prompt.txt
-          あなたはWebマーケティングコンサルタントです。
-          以下のデータに基づき、コンバージョンを中心とした週次レポートを作成してください。
+          あなたは熟練のWebマーケティングコンサルタントです。
+          以下のデータに基づき、**具体的でインサイトのある週次レポート**を作成してください。
 
           【分析対象期間】
           - 今週: $START_THIS から $END_THIS
@@ -68,47 +69,56 @@ jobs:
           【指示：データ取得】
           mcp__google-analytics__run_report を使い、「今週」と「前週」のデータを取得してください。
           
-          ★重要：データ量を最小化するため、以下の指標のみを取得してください。
+          **取得する指標（以下の3つをそれぞれ取得すること）:**
           
-          1. **チャネル別トラフィック（超軽量）**
-             - dimensions: ["sessionDefaultChannelGroup"]
+          1. **詳細な流入元トラフィック**
+             - dimensions: ["sessionSource", "sessionMedium"]
              - metrics: ["sessions"]
-             - ※「Organic Search」「Paid Search」などの大枠のトレンドを見ます。
+             - ※「google / cpc」や「yahoo / organic」ごとの増減を見ます。
           
-          2. **イベント・コンバージョン**
+          2. **ユーザー属性（デバイス・地域）**
+             - dimensions: ["deviceCategory", "city"]
+             - metrics: ["sessions"]
+             - ※「スマホ比率」や「地域ごとのアクセス傾向」を見ます。
+          
+          3. **イベント・コンバージョン**
              - dimensions: ["eventName"]
              - metrics: ["eventCount"]
-             - ※ここからCVRを計算します。
 
           【指示：分析と計算】
           1. **前週比**: 
-             - (今週-前週)÷前週×100 で増減率を算出。
+             - 主要な数値について (今週-前週)÷前週×100 で増減率を算出。「+XX%」「-XX%」と明記。
           
           2. **CVRとファネル**:
-             - 予約開始: "booking_form_start" (または form_start 等の類似イベント)
-             - 予約完了: "booking_complete" (または purchase 等の類似イベント)
+             - 予約開始: "booking_form_start"
+             - 予約完了: "booking_complete"
              - CVR = (完了数 ÷ 開始数) × 100
 
           【出力フォーマット】
           Markdown形式で出力してください。
 
           ***
-          # 📉 週次アクセス解析レポート ($START_THIS 〜 $END_THIS)
+          # 📈 週次アクセス解析レポート ($START_THIS 〜 $END_THIS)
           
-          ## 1. コンバージョン成果 (最重要)
+          ## 1. コンバージョン成果
           - **全体CVR**: **[XX.X%]** (前週比: ±XXpt)
           - **予約フォーム開始**: [XX件] (前週比: ±XX%)
           - **予約完了**: [XX件] (前週比: ±XX%)
-          - **考察**: (数値の変化とその要因)
+          - **考察**: (CVRの変化要因について、流入元やデバイスの変化と絡めて考察)
           
-          ## 2. チャネル別トラフィック
-          - **主な流入経路**:
-            * [チャネル名]: [セッション数] (前週比: ±XX%)
+          ## 2. 流入元詳細分析
+          - **トップ流入元**:
+            * [ソース/メディア]: [セッション数] (前週比: ±XX%)
             * ...
-          - **考察**: (検索や広告など、どのチャネルが好調か)
+          - **考察**: (特定の広告や検索エンジンの動きについて)
           
-          ## 3. 今後の対策
-          - **アクション**: (具体的な改善案を1つ)
+          ## 3. ユーザー属性トレンド
+          - **デバイス比率**: (Mobile vs Desktopの傾向)
+          - **注目エリア**: (アクセスが増えている都市など)
+          
+          ## 4. 今後のアクション
+          - **課題**:
+          - **具体的施策**:
           ***
           EOF
 
@@ -139,7 +149,7 @@ jobs:
             const jstToday = new Date(today.getTime() + jstOffset);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            const title = `(${todayFull}) GA4チャネル別解析レポート`;
+            const title = `(${todayFull}) 📊 GA4詳細解析レポート`;
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
