@@ -11,8 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 【ポイント】actions/checkout (コードのダウンロード) は書きません。
-      # これを行わないことで、Geminiに余計なファイルが渡らず、25万トークン制限を確実に回避できます。
+      - uses: actions/checkout@v4
 
       # MCPサーバーの準備
       - name: Pre-install MCP server
@@ -20,19 +19,28 @@ jobs:
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
       
+      # 【復活】これが成功の鍵でした。Gemini起動前に不要ファイルを確実に消します。
+      - name: Clean up huge files for Gemini (Token Saving)
+        run: |
+          echo "Removing heavy files to save API quota..."
+          rm -rf .git
+          rm -f package-lock.json
+          rm -f yarn.lock
+          rm -rf node_modules
+          ls -a
+
       # Geminiの実行
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
         env:
-          # ここで環境変数をセットすれば、下のsettings_jsonの $変数名 で正しく読み取られます
+          # ここで環境変数をセットし、下のsettings_jsonの $変数名 で読み込ませます
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
           GEMINI_MODEL: gemini-2.5-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # ↓↓↓【修正】ここを元の「動いていた書き方」に戻しました ↓↓↓
           settings_json: |
             {
               "mcpServers": {
