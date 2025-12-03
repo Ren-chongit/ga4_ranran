@@ -11,14 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # MCPサーバーの準備（キャッシュ等の確認）
+      - uses: actions/checkout@v4
+
+      # MCPサーバーの準備
       - name: Pre-install MCP server
         run: |
           npx -y mcp-server-google-analytics --version || echo "MCP server ready"
         continue-on-error: true
       
-      # 【追加】Geminiに渡す前に、重たいファイルを強制削除してトークンを節約する
-      # これを行わないと package-lock.json や node_modules を読み込んでしまい、無料枠を即座に使い切ります
+      # 【重要】ここが消えていました！Gemini起動前に重いファイルを削除するステップ
       - name: Clean up huge files for Gemini (Token Saving)
         run: |
           echo "Removing heavy files to save API quota..."
@@ -26,8 +27,9 @@ jobs:
           rm -f package-lock.json
           rm -f yarn.lock
           rm -rf node_modules
-          ls -a  # 確認用（何が残っているかログに出す）
+          ls -a
 
+      # Geminiの実行（設定JSON修正済み）
       - name: Run Gemini GA4 Summary via MCP (JS server)
         id: ga4
         uses: google-gemini/gemini-cli-action@main
@@ -38,6 +40,7 @@ jobs:
           GEMINI_MODEL: gemini-2.5-flash
         with:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # ↓↓↓ ここが修正済みの設定部分です ↓↓↓
           settings_json: |
             {
               "mcpServers": {
@@ -168,8 +171,8 @@ jobs:
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
             // MM-DD形式に整形
-            const fmt = (d) => d.toISOString().split('T')[0].slice(5); // "2025-10-22" -> "10-22"
-            const todayFull = jstToday.toISOString().split('T')[0]; // 実行日は西暦あり
+            const fmt = (d) => d.toISOString().split('T')[0].slice(5);
+            const todayFull = jstToday.toISOString().split('T')[0];
             const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             
             const outs = ${{ toJSON(steps.ga4.outputs) }};
