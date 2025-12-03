@@ -45,9 +45,9 @@ jobs:
                   "command": "npx",
                   "args": ["-y", "mcp-server-google-analytics"],
                   "env": {
-                    "GOOGLE_CLIENT_EMAIL": "$GOOGLE_CLIENT_EMAIL",
-                    "GOOGLE_PRIVATE_KEY": "$GOOGLE_PRIVATE_KEY",
-                    "GA_PROPERTY_ID": "$GA_PROPERTY_ID"
+                    "GOOGLE_CLIENT_EMAIL": "${{ secrets.GOOGLE_CLIENT_EMAIL }}",
+                    "GOOGLE_PRIVATE_KEY": ${{ toJSON(secrets.GOOGLE_PRIVATE_KEY) }},
+                    "GA_PROPERTY_ID": "${{ secrets.GA_PROPERTY_ID }}"
                   }
                 }
               },
