@@ -19,11 +19,11 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. Gemini CLI グローバルインストール (安全対策)
+      # 3. Gemini CLI グローバルインストール
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 作業ディレクトリ作成 (安全対策)
+      # 4. 作業ディレクトリ作成
       - name: Prepare Clean Workspace
         run: |
           mkdir -p work_dir
@@ -46,10 +46,8 @@ jobs:
           }
           EOF
 
-      # 6. 【修正版】プロンプト
-      # ★重要：データ爆発の犯人だった「city（都市）」を削除しました。
-      # その代わり、要望の強かった「詳細な流入元（Source/Medium）」と「デバイス」は維持します。
-      # これなら行数が数百行以内に収まるため、エラーになりません。
+      # 6. プロンプト作成（安全かつリッチ版）
+      # 都市(City)は除外、ソース/メディアとデバイス比率は維持。
       - name: Create Prompt File
         run: |
           TODAY=$(date +%Y-%m-%d)
@@ -74,7 +72,7 @@ jobs:
           1. **詳細な流入元トラフィック**
              - dimensions: ["sessionSource", "sessionMedium"]
              - metrics: ["sessions"]
-             - ※「google / cpc」のような詳細な流入元を分析します。
+             - ※「google / cpc」や「yahoo / organic」ごとの増減を見ます。
           
           2. **デバイス別利用状況**
              - dimensions: ["deviceCategory"]
@@ -139,6 +137,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
 
       # 8. Issueの作成
+      # 【修正】タイトルを「(日付) らんらんアクセス解析｜期間：MM-DD〜MM-DD」に戻しました
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
         with:
@@ -147,9 +146,19 @@ jobs:
             const today = new Date();
             const jstOffset = 9 * 60 * 60 * 1000;
             const jstToday = new Date(today.getTime() + jstOffset);
+            
+            const yesterday = new Date(jstToday);
+            yesterday.setDate(yesterday.getDate() - 1);
+            
+            const sevenDaysAgo = new Date(jstToday);
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            const fmt = (d) => d.toISOString().split('T')[0].slice(5);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            const title = const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
+            // ここでタイトルを指定の形式に戻しました
+            const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
+            
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
