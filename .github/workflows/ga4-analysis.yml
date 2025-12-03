@@ -11,111 +11,121 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. チェックアウトなし（維持）
+      # 1. コードはチェックアウトしません（リポジトリ読み込み回避）
 
-      # 2. 【ここが修正版の核です】
-      # "node_modules" だけでなく "*" (アスタリスク) を指定して
-      # 全てのファイルを強制的に無視させます。これでGeminiは何も見えなくなります。
-      - name: Create .geminiignore to BLOCK EVERYTHING
-        run: |
-          echo "*" > .geminiignore
-          echo "Created .geminiignore with '*' to ignore ALL files."
-          cat .geminiignore
-
-      # 3. MCPサーバーの準備
-      - name: Pre-install MCP server
-        run: |
-          npx -y mcp-server-google-analytics --version || echo "MCP server ready"
-        continue-on-error: true
-      
-      # 4. Geminiの実行
-      - name: Run Gemini GA4 Summary via MCP (JS server)
-        id: ga4
-        uses: google-gemini/gemini-cli-action@main
-        env:
-          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
-          GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
-          GEMINI_MODEL: gemini-2.5-flash
+      # 2. Node.jsのセットアップ
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          settings_json: |
-            {
-              "mcpServers": {
-                "google-analytics": {
-                  "command": "npx",
-                  "args": ["-y", "mcp-server-google-analytics"],
-                  "env": {
-                    "GOOGLE_CLIENT_EMAIL": "$GOOGLE_CLIENT_EMAIL",
-                    "GOOGLE_PRIVATE_KEY": "$GOOGLE_PRIVATE_KEY",
-                    "GA_PROPERTY_ID": "$GA_PROPERTY_ID"
-                  }
+          node-version: '20'
+
+      # 3. 【解決策】Gemini CLIを「グローバル」にインストールします
+      # これにより、現在のフォルダ(カレントディレクトリ)に node_modules が生成されなくなり、
+      # Geminiが読み込むファイルが「ゼロ」になります。
+      - name: Install Gemini CLI Globally
+        run: npm install -g @google/gemini-cli
+
+      # 4. MCP設定ファイルの作成
+      - name: Create settings.json
+        run: |
+          cat <<EOF > settings.json
+          {
+            "mcpServers": {
+              "google-analytics": {
+                "command": "npx",
+                "args": ["-y", "mcp-server-google-analytics"],
+                "env": {
+                  "GOOGLE_CLIENT_EMAIL": "${{ secrets.GOOGLE_CLIENT_EMAIL }}",
+                  "GOOGLE_PRIVATE_KEY": ${{ toJSON(secrets.GOOGLE_PRIVATE_KEY) }},
+                  "GA_PROPERTY_ID": "${{ secrets.GA_PROPERTY_ID }}"
                 }
-              },
-              "coreTools": ["mcp__google-analytics__run_report"]
-            }
-          prompt: |
-            あなたはプロのGA4データアナリストです。
-            
-            【重要：APIエラーとトークン超過を防ぐための鉄の掟】
-            1. **dimensionFilter（フィルタ機能）は使用禁止です。** APIエラーの原因になります。
-            2. データの取得件数は、必ず **limit: 50** を指定して制限してください。全件取得は禁止です。
-            
-            【手順1：データの取得】
-            以下のデータを `mcp__google-analytics__run_report` ツールで取得してください。
-            ※引数には必ず `"limit": "50"` を含めること。
-            
-            1. **イベントデータ（今週）**
-               - 期間：昨日から過去7日間
-               - dimensions: ["eventName"]
-               - metrics: ["eventCount"]
-               - limit: 50
-            
-            2. **流入元データ（今週）**
-               - dimensions: ["sessionSource"]
-               - metrics: ["sessions"]
-               - limit: 20
-            
-            3. **ページデータ（今週）**
-               - dimensions: ["pagePath"]
-               - metrics: ["screenPageViews"]
-               - limit: 20
-            
-            【手順2：計算と分析】
-            取得した上位50件のイベントリストの中から、以下のイベントを探して計算してください。
-            リストにない場合は「データなし（ランク外）」として扱ってください。
-            
-            - `booking_form_start` (予約フォーム開始)
-            - `booking_complete` (予約完了)
-            
-            **コンバージョン率(CVR)の計算:**
-            CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
-            
-            【出力形式】
-            GitHub Issueの本文として使えるMarkdown形式で出力。
-            
-            ## 📊 アクセス解析レポート (MM/DD - MM/DD)
-            
-            ### 1. トラフィックと人気ページ
-            - **トップ流入元**: (上位のソースとセッション数を記載)
-            - **人気ページ**: (上位のパスとPV数を記載)
-            
-            ### 2. コンバージョン分析
-            - **予約フォーム開始**: XX件
-            - **予約完了**: XX件
-            - **CVR**: XX.X%
-            - **考察**: (数値に基づく短いコメント)
-            
-            ### 3. データ取得メモ
-            - 上位50件のデータから抽出しました。
-      
+              }
+            },
+            "coreTools": ["mcp__google-analytics__run_report"]
+          }
+          EOF
+
+      # 5. プロンプトファイルの作成
+      - name: Create prompt.txt
+        run: |
+          cat <<EOF > prompt.txt
+          あなたはプロのGA4データアナリストです。
+          
+          【重要：APIエラーを防ぐための鉄の掟】
+          1. **dimensionFilter（フィルタ機能）は使用禁止です。** APIエラーの原因になります。
+          2. データの取得件数は、必ず **limit: 50** を指定して制限してください。
+          
+          【手順1：データの取得】
+          以下のデータを mcp__google-analytics__run_report ツールで取得してください。
+          ※引数には必ず "limit": "50" を含めること。
+          
+          1. **イベントデータ（今週）**
+             - 期間：昨日から過去7日間
+             - dimensions: ["eventName"]
+             - metrics: ["eventCount"]
+             - limit: 50
+          
+          2. **流入元データ（今週）**
+             - dimensions: ["sessionSource"]
+             - metrics: ["sessions"]
+             - limit: 20
+          
+          3. **ページデータ（今週）**
+             - dimensions: ["pagePath"]
+             - metrics: ["screenPageViews"]
+             - limit: 20
+          
+          【手順2：計算と分析】
+          取得した上位50件のイベントリストの中から、以下のイベントを探して計算してください。
+          リストにない場合は「データなし（ランク外）」として扱ってください。
+          
+          - booking_form_start (予約フォーム開始)
+          - booking_complete (予約完了)
+          
+          **コンバージョン率(CVR)の計算:**
+          CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
+          
+          【出力形式】
+          GitHub Issueの本文として使えるMarkdown形式で出力。
+          
+          ## 📊 アクセス解析レポート (MM/DD - MM/DD)
+          
+          ### 1. トラフィックと人気ページ
+          - **トップ流入元**: (上位のソースとセッション数を記載)
+          - **人気ページ**: (上位のパスとPV数を記載)
+          
+          ### 2. コンバージョン分析
+          - **予約フォーム開始**: XX件
+          - **予約完了**: XX件
+          - **CVR**: XX.X%
+          - **考察**: (数値に基づく短いコメント)
+          
+          ### 3. データ取得メモ
+          - 上位50件のデータから抽出しました。
+          EOF
+
+      # 6. Geminiの実行（手動実行）
+      # 空の workspace ディレクトリで実行することで、読み込み対象を完全に無くします
+      - name: Run Gemini
+        id: gemini_run
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # 実行結果を result.md に保存
+          gemini run "$(cat prompt.txt)" --settings settings.json > result.md
+          
+          # 結果を環境変数に格納（次のステップで使用するため）
+          echo "GEMINI_RESPONSE<<EOF" >> $GITHUB_ENV
+          cat result.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # 7. Issueの作成
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
         with:
           github-token: ${{ github.token }} 
           script: |
             const today = new Date();
-            // 日本時間を考慮（UTCから9時間進める）
             const jstOffset = 9 * 60 * 60 * 1000;
             const jstToday = new Date(today.getTime() + jstOffset);
             
@@ -125,21 +135,12 @@ jobs:
             const sevenDaysAgo = new Date(jstToday);
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
-            // MM-DD形式に整形
             const fmt = (d) => d.toISOString().split('T')[0].slice(5);
             const todayFull = jstToday.toISOString().split('T')[0];
             const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             
-            const outs = ${{ toJSON(steps.ga4.outputs) }};
-            const pick = (keys) => { 
-              for (const k of keys){ 
-                const v=(outs?.[k]||'').trim(); 
-                if(v) return v; 
-              } 
-              return ''; 
-            };
-            const body = pick(['gemini_result','gemini_response','summary','output','text','content'])
-              || 'GA4集計結果が取得できませんでした。';
+            // 環境変数から結果を取得
+            const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,
