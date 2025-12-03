@@ -20,27 +20,23 @@ jobs:
           node-version: '20'
 
       # 3. Gemini CLIをグローバルインストール
-      # カレントディレクトリを汚さないため、トークンエラー回避に必須です
+      # トークンエラー回避のための必須設定
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
       # 4. 設定ファイルの作成（~/.gemini/settings.json）
+      # 【修正】env設定を削除し、プロセス環境変数から直接読み込ませるように変更（認証トラブル回避）
       - name: Configure Gemini Settings
         run: |
           mkdir -p ~/.gemini
           
-          # 環境変数の参照設定を含むJSONを作成
+          # シンプルな設定ファイルを作成
           cat <<EOF > ~/.gemini/settings.json
           {
             "mcpServers": {
               "google-analytics": {
                 "command": "npx",
-                "args": ["-y", "mcp-server-google-analytics"],
-                "env": {
-                  "GOOGLE_CLIENT_EMAIL": "\${GOOGLE_CLIENT_EMAIL}",
-                  "GOOGLE_PRIVATE_KEY": "\${GOOGLE_PRIVATE_KEY}",
-                  "GA_PROPERTY_ID": "\${GA_PROPERTY_ID}"
-                }
+                "args": ["-y", "mcp-server-google-analytics"]
               }
             },
             "coreTools": ["mcp__google-analytics__run_report"]
@@ -48,39 +44,37 @@ jobs:
           EOF
 
       # 5. プロンプト（指示書）の作成
+      # 【修正】「limit: 50」の指示を削除しました。これでAIが困らなくなります。
       - name: Create Prompt File
         run: |
           cat <<EOF > prompt.txt
           あなたはプロのGA4データアナリストです。
           
           【重要】
-          1. dimensionFilter（フィルタ機能）は使用禁止です。
-          2. データ取得件数は必ず limit: 50 を指定してください。
+          1. **dimensionFilter（フィルタ機能）は使用禁止です。**
+          2. **limit（件数制限）の指定も不要です。** デフォルトの件数で取得してください。
           
           【手順1：データの取得】
           以下のデータを mcp__google-analytics__run_report ツールで取得してください。
-          ※引数には必ず "limit": "50" を含めること。
+          ※引数は dimensions, metrics, dateRanges のみにしてください。
           
           1. **イベントデータ（今週）**
              - 期間：昨日から過去7日間
              - dimensions: ["eventName"]
              - metrics: ["eventCount"]
-             - limit: 50
           
           2. **流入元データ（今週）**
              - dimensions: ["sessionSource"]
              - metrics: ["sessions"]
-             - limit: 20
           
           3. **ページデータ（今週）**
              - dimensions: ["pagePath"]
              - metrics: ["screenPageViews"]
-             - limit: 20
           
           【手順2：計算と分析】
           取得したデータから以下を計算し、レポートを作成してください。
           
-          - 予約フォーム開始数 (booking_form_start 等)
+          - 予約フォーム開始数 (booking_form_start 等。なければ似たイベントを探す)
           - 予約完了数 (booking_complete 等)
           - CVR = (完了数 ÷ 開始数) × 100
           
@@ -89,7 +83,8 @@ jobs:
           EOF
 
       # 6. Geminiの実行
-      # --yolo オプションを追加しました。これで確認待ちで止まることがなくなります。
+      # --yolo オプションは維持。
+      # ここで環境変数を渡すことで、MCPサーバーが認証情報を受け取れます。
       - name: Run Gemini
         id: gemini_run
         env:
@@ -98,7 +93,7 @@ jobs:
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
-          # --yolo を追加して、ツールの実行許可を自動承認させます
+          # Geminiを実行
           gemini -m gemini-2.5-flash --yolo "$(cat prompt.txt)" > result.md
           
           # 結果を環境変数に格納
