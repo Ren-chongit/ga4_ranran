@@ -19,20 +19,17 @@ jobs:
         with:
           node-version: '20'
 
-      # 3. 【解決策】Gemini CLIを「グローバル」にインストールします
-      # これにより、現在のフォルダに node_modules が生成されなくなり、
-      # Geminiが読み込むファイルが「ゼロ」になります（トークンエラーの完全回避）。
+      # 3. Gemini CLIをグローバルインストール
+      # カレントディレクトリを汚さないため、トークンエラー回避に必須です
       - name: Install Gemini CLI Globally
         run: npm install -g @google/gemini-cli
 
-      # 4. 設定ファイルを「ホームディレクトリ」に作成します
-      # Gemini CLIは ~/.gemini/settings.json を自動的に読み込みます（--settingsフラグは不要）
+      # 4. 設定ファイルの作成（~/.gemini/settings.json）
       - name: Configure Gemini Settings
         run: |
-          # 設定フォルダの作成
           mkdir -p ~/.gemini
           
-          # settings.json の作成（環境変数は実行時に展開されます）
+          # 環境変数の参照設定を含むJSONを作成
           cat <<EOF > ~/.gemini/settings.json
           {
             "mcpServers": {
@@ -56,9 +53,9 @@ jobs:
           cat <<EOF > prompt.txt
           あなたはプロのGA4データアナリストです。
           
-          【重要：APIエラーを防ぐための鉄の掟】
-          1. **dimensionFilter（フィルタ機能）は使用禁止です。** APIエラーの原因になります。
-          2. データの取得件数は、必ず **limit: 50** を指定して制限してください。
+          【重要】
+          1. dimensionFilter（フィルタ機能）は使用禁止です。
+          2. データ取得件数は必ず limit: 50 を指定してください。
           
           【手順1：データの取得】
           以下のデータを mcp__google-analytics__run_report ツールで取得してください。
@@ -81,36 +78,18 @@ jobs:
              - limit: 20
           
           【手順2：計算と分析】
-          取得した上位50件のイベントリストの中から、以下のイベントを探して計算してください。
-          リストにない場合は「データなし（ランク外）」として扱ってください。
+          取得したデータから以下を計算し、レポートを作成してください。
           
-          - booking_form_start (予約フォーム開始)
-          - booking_complete (予約完了)
-          
-          **コンバージョン率(CVR)の計算:**
-          CVR = (予約完了数 ÷ 予約フォーム開始数) × 100
+          - 予約フォーム開始数 (booking_form_start 等)
+          - 予約完了数 (booking_complete 等)
+          - CVR = (完了数 ÷ 開始数) × 100
           
           【出力形式】
-          GitHub Issueの本文として使えるMarkdown形式で出力。
-          
-          ## 📊 アクセス解析レポート (MM/DD - MM/DD)
-          
-          ### 1. トラフィックと人気ページ
-          - **トップ流入元**: (上位のソースとセッション数を記載)
-          - **人気ページ**: (上位のパスとPV数を記載)
-          
-          ### 2. コンバージョン分析
-          - **予約フォーム開始**: XX件
-          - **予約完了**: XX件
-          - **CVR**: XX.X%
-          - **考察**: (数値に基づく短いコメント)
-          
-          ### 3. データ取得メモ
-          - 上位50件のデータから抽出しました。
+          Markdown形式で、GitHub Issueにそのまま貼れる形式で出力してください。
           EOF
 
       # 6. Geminiの実行
-      # 環境変数を渡しながら、作成したプロンプトを読ませます
+      # --yolo オプションを追加しました。これで確認待ちで止まることがなくなります。
       - name: Run Gemini
         id: gemini_run
         env:
@@ -119,10 +98,10 @@ jobs:
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
-          # Geminiを実行し、結果を result.md に保存
-          gemini -m gemini-2.5-flash "$(cat prompt.txt)" > result.md
+          # --yolo を追加して、ツールの実行許可を自動承認させます
+          gemini -m gemini-2.5-flash --yolo "$(cat prompt.txt)" > result.md
           
-          # 結果を環境変数に格納（次のステップで使用するため）
+          # 結果を環境変数に格納
           echo "GEMINI_RESPONSE<<EOF" >> $GITHUB_ENV
           cat result.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
@@ -147,7 +126,6 @@ jobs:
             const todayFull = jstToday.toISOString().split('T')[0];
             const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
             
-            // 環境変数から結果を取得
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
