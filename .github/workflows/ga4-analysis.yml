@@ -13,52 +13,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # 1. 読み込み回避
+      # 1. Checkout (任意ですが安全のため)
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # 2. Node.js
+      # 2. Setup Node.js (MCPサーバー用)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      # 3. Gemini CLI グローバルインストール
-      - name: Install Gemini CLI Globally
-        run: npm install -g @google/gemini-cli
-
-      # 4. 作業ディレクトリ作成
-      - name: Prepare Clean Workspace
-        run: |
-          mkdir -p work_dir
-          cd work_dir
-          echo "*" > .geminiignore
-
-      # 5. 設定ファイル作成
-      - name: Configure Gemini Settings
-        run: |
-          mkdir -p ~/.gemini
-          cat <<EOF > ~/.gemini/settings.json
-          {
-            "mcpServers": {
-              "google-analytics": {
-                "command": "npx",
-                "args": ["-y", "mcp-server-google-analytics"]
-              }
-            },
-            "coreTools": ["mcp__google-analytics__run_report"]
-          }
-          EOF
-
-      # 6. プロンプト作成（安全かつリッチ版）
-      # 都市(City)は除外、ソース/メディアとデバイス比率は維持。
-      - name: Create Prompt File
+      # 3. Create Prompt Text
+      - name: Generate Prompt
+        id: prompt_step
         run: |
           TODAY=$(date +%Y-%m-%d)
           START_THIS=$(date -d "7 days ago" +%Y-%m-%d)
           END_THIS=$(date -d "1 day ago" +%Y-%m-%d)
           START_LAST=$(date -d "14 days ago" +%Y-%m-%d)
           END_LAST=$(date -d "8 days ago" +%Y-%m-%d)
-
-          cat <<EOF > work_dir/prompt.txt
+          
+          DELIMITER=$(uuidgen)
+          echo "PROMPT_TEXT<<$DELIMITER" >> $GITHUB_ENV
+          cat <<EOF >> $GITHUB_ENV
           あなたは熟練のWebマーケティングコンサルタントです。
           以下のデータに基づき、**具体的でインサイトのある週次レポート**を作成してください。
 
@@ -121,28 +98,36 @@ jobs:
           - **具体的施策**:
           ***
           EOF
+          echo "$DELIMITER" >> $GITHUB_ENV
 
-      # 7. Geminiの実行
-      - name: Run Gemini
-        id: gemini_run
+      # 4. 公式のGemini CLI Actionを実行
+      - name: Run Gemini CLI
+        id: gemini
+        uses: google-github-actions/run-gemini-cli@main
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
-        run: |
-          cd work_dir
-          gemini -m gemini-1.5-flash --yolo "$(cat prompt.txt)" > result.md
-          
-          DELIMITER=$(uuidgen)
-          echo "GEMINI_RESPONSE<<$DELIMITER" >> $GITHUB_ENV
-          cat result.md >> $GITHUB_ENV
-          echo "$DELIMITER" >> $GITHUB_ENV
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: "gemini-1.5-pro"
+          prompt: ${{ env.PROMPT_TEXT }}
+          settings: |
+            {
+              "mcpServers": {
+                "google-analytics": {
+                  "command": "npx",
+                  "args": ["-y", "mcp-server-google-analytics"]
+                }
+              },
+              "coreTools": ["mcp__google-analytics__run_report"]
+            }
 
-      # 8. Issueの作成
-      # 【修正】タイトルを「(日付) らんらんアクセス解析｜期間：MM-DD〜MM-DD」に戻しました
+      # 5. Issueの作成
       - name: Create GitHub Issue with Summary
         uses: actions/github-script@v7
+        env:
+          GEMINI_RESPONSE: ${{ steps.gemini.outputs.summary }}
         with:
           github-token: ${{ github.token }} 
           script: |
@@ -159,9 +144,7 @@ jobs:
             const fmt = (d) => d.toISOString().split('T')[0].slice(5);
             const todayFull = jstToday.toISOString().split('T')[0];
             
-            // ここでタイトルを指定の形式に戻しました
             const title = `(${todayFull}) らんらんアクセス解析｜期間：${fmt(sevenDaysAgo)}〜${fmt(yesterday)}`;
-            
             const body = process.env.GEMINI_RESPONSE || 'GA4集計結果が取得できませんでした。';
             
             const { data: issue } = await github.rest.issues.create({
