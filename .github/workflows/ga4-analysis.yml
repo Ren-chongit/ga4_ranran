@@ -130,11 +130,12 @@ jobs:
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
           cd work_dir
-          gemini -m gemini-2.5-flash --yolo "$(cat prompt.txt)" > result.md
+          gemini -m gemini-2.0-flash --yolo "$(cat prompt.txt)" > result.md
           
-          echo "GEMINI_RESPONSE<<EOF" >> $GITHUB_ENV
+          DELIMITER=$(uuidgen)
+          echo "GEMINI_RESPONSE<<$DELIMITER" >> $GITHUB_ENV
           cat result.md >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "$DELIMITER" >> $GITHUB_ENV
 
       # 8. Issueの作成
       # 【修正】タイトルを「(日付) らんらんアクセス解析｜期間：MM-DD〜MM-DD」に戻しました
