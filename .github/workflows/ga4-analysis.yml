@@ -3,6 +3,8 @@ on:
   workflow_dispatch: {}
   schedule:
     - cron: '0 0 * * 1'  # 毎週月曜 日本時間09:00（UTC 00:00）
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 permissions:
   contents: read
   issues: write
@@ -10,8 +12,6 @@ jobs:
   summarize-ga4:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       # 1. 読み込み回避
 
@@ -132,7 +132,7 @@ jobs:
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         run: |
           cd work_dir
-          gemini -m gemini-2.0-flash --yolo "$(cat prompt.txt)" > result.md
+          gemini -m gemini-1.5-flash --yolo "$(cat prompt.txt)" > result.md
           
           DELIMITER=$(uuidgen)
           echo "GEMINI_RESPONSE<<$DELIMITER" >> $GITHUB_ENV
