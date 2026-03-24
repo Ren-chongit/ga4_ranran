@@ -33,9 +33,7 @@ jobs:
           START_LAST=$(date -d "14 days ago" +%Y-%m-%d)
           END_LAST=$(date -d "8 days ago" +%Y-%m-%d)
           
-          DELIMITER=$(uuidgen)
-          echo "PROMPT_TEXT<<$DELIMITER" >> $GITHUB_ENV
-          cat <<EOF >> $GITHUB_ENV
+          cat <<EOF > prompt.txt
           あなたは熟練のWebマーケティングコンサルタントです。
           以下のデータに基づき、**具体的でインサイトのある週次レポート**を作成してください。
 
@@ -98,6 +96,11 @@ jobs:
           - **具体的施策**:
           ***
           EOF
+          
+          # 環境変数経由のEOFエラーを回避するためファイルの内容を1行化するかUUIDで渡す
+          DELIMITER="EOF_$(date +%s)_RANDOM"
+          echo "PROMPT_TEXT<<$DELIMITER" >> $GITHUB_ENV
+          cat prompt.txt >> $GITHUB_ENV
           echo "$DELIMITER" >> $GITHUB_ENV
 
       # 4. 公式のGemini CLI Actionを実行
@@ -110,7 +113,7 @@ jobs:
           GA_PROPERTY_ID: ${{ secrets.GA_PROPERTY_ID }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          gemini_model: "gemini-1.5-pro"
+          gemini_model: "gemini-3.0-flash"
           prompt: ${{ env.PROMPT_TEXT }}
           settings: |
             {
